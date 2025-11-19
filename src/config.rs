@@ -52,6 +52,7 @@ pub struct Config {
     pub longitude: f64,
     pub temperature_unit: TemperatureUnit,
     pub refresh_interval_minutes: u64,
+    pub location_name: Option<String>,
 }
 
 impl Default for Config {
@@ -61,6 +62,7 @@ impl Default for Config {
             longitude: -74.0060,
             temperature_unit: TemperatureUnit::default(),
             refresh_interval_minutes: 15,
+            location_name: Some("New York, NY".to_string()),
         }
     }
 }

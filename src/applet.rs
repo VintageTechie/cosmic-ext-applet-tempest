@@ -11,7 +11,7 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, search_location, Location};
 
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
@@ -30,6 +30,8 @@ pub struct Tempest {
     latitude_input: String,
     longitude_input: String,
     refresh_input: String,
+    city_search_input: String,
+    search_results: Vec<Location>,
 }
 
 impl Default for Tempest {
@@ -42,6 +44,8 @@ impl Default for Tempest {
             latitude_input: config.latitude.to_string(),
             longitude_input: config.longitude.to_string(),
             refresh_input: config.refresh_interval_minutes.to_string(),
+            city_search_input: String::new(),
+            search_results: Vec::new(),
             config,
             config_handler: None,
         }
@@ -62,6 +66,10 @@ pub enum Message {
     UpdateLatitude(String),
     UpdateLongitude(String),
     UpdateRefreshInterval(String),
+    UpdateCitySearch(String),
+    SearchCity,
+    LocationSearchResults(Result<Vec<Location>, String>),
+    SelectLocation(Location),
     ConfigUpdated(Config),
 }
 
@@ -210,6 +218,52 @@ impl Application for Tempest {
                 )
             );
 
+            // City search
+            column = column.push(
+                settings::item(
+                    "Location",
+                    widget::text_input("Search city...", &self.city_search_input)
+                        .on_input(Message::UpdateCitySearch)
+                        .width(cosmic::iced::Length::Fill)
+                )
+            );
+
+            column = column.push(
+                widget::button::standard("Search")
+                    .on_press(Message::SearchCity)
+                    .width(cosmic::iced::Length::Fill)
+            );
+
+            // Show search results if any
+            for location in &self.search_results {
+                let location_str = if let Some(ref country) = location.country {
+                    if let Some(ref admin1) = location.admin1 {
+                        format!("{}, {}, {}", location.name, admin1, country)
+                    } else {
+                        format!("{}, {}", location.name, country)
+                    }
+                } else {
+                    location.name.clone()
+                };
+
+                column = column.push(
+                    widget::button::standard(location_str)
+                        .on_press(Message::SelectLocation(location.clone()))
+                        .padding([8, 12])
+                        .width(cosmic::iced::Length::Fill)
+                );
+            }
+
+            // Show current location if set
+            if let Some(ref loc_name) = self.config.location_name {
+                column = column.push(
+                    settings::item(
+                        "Current Location",
+                        text(loc_name)
+                    )
+                );
+            }
+
             column = column.push(
                 settings::item(
                     "Latitude",
@@ -352,6 +406,56 @@ impl Application for Tempest {
                         self.save_config();
                     }
                 }
+            }
+            Message::UpdateCitySearch(value) => {
+                self.city_search_input = value;
+            }
+            Message::SearchCity => {
+                let query = self.city_search_input.clone();
+                return Task::perform(
+                    async move {
+                        search_location(&query).await
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| Action::App(Message::LocationSearchResults(result)),
+                );
+            }
+            Message::LocationSearchResults(result) => {
+                match result {
+                    Ok(locations) => {
+                        self.search_results = locations;
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to search locations: {}", e);
+                        self.search_results.clear();
+                    }
+                }
+            }
+            Message::SelectLocation(location) => {
+                self.config.latitude = location.latitude;
+                self.config.longitude = location.longitude;
+                self.latitude_input = location.latitude.to_string();
+                self.longitude_input = location.longitude.to_string();
+
+                let location_str = if let Some(ref country) = location.country {
+                    if let Some(ref admin1) = location.admin1 {
+                        format!("{}, {}, {}", location.name, admin1, country)
+                    } else {
+                        format!("{}, {}", location.name, country)
+                    }
+                } else {
+                    location.name.clone()
+                };
+
+                self.config.location_name = Some(location_str);
+                self.search_results.clear();
+                self.city_search_input.clear();
+                self.save_config();
+
+                return Task::perform(
+                    async { Message::RefreshWeather },
+                    Action::App
+                );
             }
             Message::ConfigUpdated(config) => {
                 self.config = config;

@@ -80,6 +80,58 @@ pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str
     })
 }
 
+/// Location search result from geocoding
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Location {
+    pub name: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub country: Option<String>,
+    pub admin1: Option<String>,
+}
+
+/// Open-Meteo Geocoding API response
+#[derive(Debug, Deserialize)]
+struct GeocodingResponse {
+    results: Option<Vec<GeocodingResult>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeocodingResult {
+    name: String,
+    latitude: f64,
+    longitude: f64,
+    country: Option<String>,
+    admin1: Option<String>,
+}
+
+/// Search for locations by city name using Open-Meteo Geocoding API
+pub async fn search_location(query: &str) -> Result<Vec<Location>, Box<dyn std::error::Error>> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let url = format!(
+        "https://geocoding-api.open-meteo.com/v1/search?name={}&count=5&language=en&format=json",
+        urlencoding::encode(query)
+    );
+
+    let response = reqwest::get(&url).await?;
+    let data: GeocodingResponse = response.json().await?;
+
+    let locations = data.results.map(|results| {
+        results.into_iter().map(|r| Location {
+            name: r.name,
+            latitude: r.latitude,
+            longitude: r.longitude,
+            country: r.country,
+            admin1: r.admin1,
+        }).collect()
+    }).unwrap_or_default();
+
+    Ok(locations)
+}
+
 /// Converts WMO weather codes to human-readable descriptions
 pub fn weathercode_to_description(code: i32) -> &'static str {
     match code {
