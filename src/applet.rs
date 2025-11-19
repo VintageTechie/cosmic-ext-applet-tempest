@@ -1,0 +1,376 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+use cosmic::app::{Task, Core};
+use cosmic::cosmic_config::CosmicConfigEntry;
+use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
+use cosmic::iced::window::Id;
+use cosmic::iced::{Limits, Subscription};
+use cosmic::iced_futures::Subscription as IcedSubscription;
+use cosmic::widget::{self, text, settings};
+use cosmic::{Application, Element, Action};
+use std::time::Duration;
+
+use crate::config::{Config, TemperatureUnit};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description};
+
+/// This is the struct that represents your application.
+/// It is used to define the data that will be used by your application.
+pub struct Tempest {
+    /// Application state which is managed by the COSMIC runtime.
+    core: Core,
+    /// The popup id.
+    popup: Option<Id>,
+    /// Weather data.
+    weather_data: Option<WeatherData>,
+    /// Configuration
+    config: Config,
+    /// Config handler for persistence
+    config_handler: Option<cosmic::cosmic_config::Config>,
+    /// Input field states
+    latitude_input: String,
+    longitude_input: String,
+    refresh_input: String,
+}
+
+impl Default for Tempest {
+    fn default() -> Self {
+        let config = Config::default();
+        Self {
+            core: Default::default(),
+            popup: None,
+            weather_data: None,
+            latitude_input: config.latitude.to_string(),
+            longitude_input: config.longitude.to_string(),
+            refresh_input: config.refresh_interval_minutes.to_string(),
+            config,
+            config_handler: None,
+        }
+    }
+}
+
+/// This is the enum that contains all the possible variants that your application will need to transmit messages.
+/// This is used to communicate between the different parts of your application.
+/// If your application does not need to send messages, you can use an empty enum or `()`.
+#[derive(Debug, Clone)]
+pub enum Message {
+    TogglePopup,
+    PopupClosed(Id),
+    RefreshWeather,
+    WeatherUpdated(Result<WeatherData, String>),
+    Tick,
+    ToggleTemperatureUnit,
+    UpdateLatitude(String),
+    UpdateLongitude(String),
+    UpdateRefreshInterval(String),
+    ConfigUpdated(Config),
+}
+
+/// Implement the `Application` trait for your application.
+/// This is where you define the behavior of your application.
+///
+/// The `Application` trait requires you to define the following types and constants:
+/// - `Executor` is the async executor that will be used to run your application's commands.
+/// - `Flags` is the data that your application needs to use before it starts.
+/// - `Message` is the enum that contains all the possible variants that your application will need to transmit messages.
+/// - `APP_ID` is the unique identifier of your application.
+impl Application for Tempest {
+    type Executor = cosmic::executor::Default;
+
+    type Flags = ();
+
+    type Message = Message;
+
+    const APP_ID: &'static str = "com.vintagetechie.CosmicExtAppletTempest";
+
+    fn core(&self) -> &Core {
+        &self.core
+    }
+
+    fn core_mut(&mut self) -> &mut Core {
+        &mut self.core
+    }
+
+    /// This is the entry point of your application, it is where you initialize your application.
+    ///
+    /// Any work that needs to be done before the application starts should be done here.
+    ///
+    /// - `core` is used to passed on for you by libcosmic to use in the core of your own application.
+    /// - `flags` is used to pass in any data that your application needs to use before it starts.
+    /// - `Task` type is used to send messages to your application. `Task::none()` can be used to send no messages to your application.
+    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
+        let config_handler = cosmic::cosmic_config::Config::new(Self::APP_ID, Config::VERSION).ok();
+        let config = config_handler
+            .as_ref()
+            .and_then(|h| Config::get_entry(h).ok())
+            .unwrap_or_default();
+
+        let latitude_input = config.latitude.to_string();
+        let longitude_input = config.longitude.to_string();
+        let refresh_input = config.refresh_interval_minutes.to_string();
+
+        let app = Tempest {
+            core,
+            config,
+            config_handler,
+            latitude_input,
+            longitude_input,
+            refresh_input,
+            ..Default::default()
+        };
+
+        // Start with initial weather fetch
+        let task = Task::perform(
+            async { Message::RefreshWeather },
+            Action::App
+        );
+
+        (app, task)
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        struct TimerWorker;
+
+        IcedSubscription::run_with_id(
+            std::any::TypeId::of::<TimerWorker>(),
+            async_stream::stream! {
+                let interval = Duration::from_secs(900); // Will be updated dynamically
+                loop {
+                    tokio::time::sleep(interval).await;
+                    yield Message::Tick;
+                }
+            }
+        )
+    }
+
+    fn on_close_requested(&self, id: Id) -> Option<Message> {
+        Some(Message::PopupClosed(id))
+    }
+
+    /// This is the main view of your application, it is the root of your widget tree.
+    ///
+    /// The `Element` type is used to represent the visual elements of your application,
+    /// it has a `Message` associated with it, which dictates what type of message it can send.
+    ///
+    /// To get a better sense of which widgets are available, check out the `widget` module.
+    fn view(&self) -> Element<Self::Message> {
+        let label = if let Some(ref weather) = self.weather_data {
+            format!("{:.0}{}", weather.current.temperature, self.config.temperature_unit.symbol())
+        } else {
+            "...".to_string()
+        };
+
+        widget::button::standard(label)
+            .on_press(Message::TogglePopup)
+            .padding(8)
+            .into()
+    }
+
+    fn view_window(&self, _id: Id) -> Element<Self::Message> {
+        let content = if let Some(ref weather) = self.weather_data {
+            let mut column = widget::column().spacing(10).padding(10).max_width(450);
+
+            // Current conditions
+            column = column.push(
+                widget::row()
+                    .spacing(10)
+                    .push(text(format!("{:.0}{}", weather.current.temperature, self.config.temperature_unit.symbol())).size(32))
+                    .push(text(weathercode_to_description(weather.current.weathercode)))
+            );
+
+            column = column.push(
+                text(format!("Wind: {:.1} mph", weather.current.windspeed)).size(14)
+            );
+
+            column = column.push(widget::divider::horizontal::default());
+
+            // 7-day forecast
+            column = column.push(text("7-Day Forecast").size(16));
+
+            for day in &weather.forecast {
+                column = column.push(
+                    widget::row()
+                        .spacing(10)
+                        .push(text(&day.date).width(100))
+                        .push(text(format!("{:.0}°", day.temp_max)).width(40))
+                        .push(text(format!("{:.0}°", day.temp_min)).width(40))
+                        .push(text(weathercode_to_description(day.weathercode)))
+                );
+            }
+
+            column = column.push(widget::divider::horizontal::default());
+
+            // Settings section
+            column = column.push(text("Settings").size(16));
+
+            column = column.push(
+                settings::item(
+                    "Temperature Unit",
+                    widget::button::standard(self.config.temperature_unit.to_string())
+                        .on_press(Message::ToggleTemperatureUnit)
+                )
+            );
+
+            column = column.push(
+                settings::item(
+                    "Latitude",
+                    widget::text_input("Latitude", &self.latitude_input)
+                        .on_input(Message::UpdateLatitude)
+                )
+            );
+
+            column = column.push(
+                settings::item(
+                    "Longitude",
+                    widget::text_input("Longitude", &self.longitude_input)
+                        .on_input(Message::UpdateLongitude)
+                )
+            );
+
+            column = column.push(
+                settings::item(
+                    "Refresh Interval (minutes)",
+                    widget::text_input("Minutes", &self.refresh_input)
+                        .on_input(Message::UpdateRefreshInterval)
+                )
+            );
+
+            column
+        } else {
+            widget::column()
+                .spacing(10)
+                .padding(10)
+                .push(text("Loading weather data..."))
+        };
+
+        let scrollable = widget::scrollable(content)
+            .height(cosmic::iced::Length::Fill);
+
+        self.core.applet.popup_container(scrollable).into()
+    }
+
+    /// Application messages are handled here. The application state can be modified based on
+    /// what message was received. Tasks may be returned for asynchronous execution on a
+    /// background thread managed by the application's executor.
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
+        match message {
+            Message::TogglePopup => {
+                return if let Some(p) = self.popup.take() {
+                    destroy_popup(p)
+                } else {
+                    let new_id = Id::unique();
+                    self.popup.replace(new_id);
+                    let mut popup_settings = self.core.applet.get_popup_settings(
+                        self.core.main_window_id().unwrap(),
+                        new_id,
+                        None,
+                        None,
+                        None,
+                    );
+                    popup_settings.positioner.size_limits = Limits::NONE
+                        .max_width(450.0)
+                        .min_width(400.0)
+                        .min_height(600.0)
+                        .max_height(800.0);
+                    get_popup(popup_settings)
+                }
+            }
+            Message::PopupClosed(id) => {
+                if self.popup.as_ref() == Some(&id) {
+                    self.popup = None;
+                }
+            }
+            Message::RefreshWeather => {
+                let lat = self.config.latitude;
+                let lon = self.config.longitude;
+                let temp_unit = self.config.temperature_unit.api_param().to_string();
+                return Task::perform(
+                    async move {
+                        fetch_weather(lat, lon, &temp_unit).await
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| Action::App(Message::WeatherUpdated(result)),
+                );
+            }
+            Message::WeatherUpdated(result) => {
+                match result {
+                    Ok(data) => {
+                        self.weather_data = Some(data);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to fetch weather: {}", e);
+                    }
+                }
+            }
+            Message::Tick => {
+                return Task::perform(
+                    async { Message::RefreshWeather },
+                    Action::App
+                );
+            }
+            Message::ToggleTemperatureUnit => {
+                self.config.temperature_unit = match self.config.temperature_unit {
+                    TemperatureUnit::Fahrenheit => TemperatureUnit::Celsius,
+                    TemperatureUnit::Celsius => TemperatureUnit::Fahrenheit,
+                };
+                self.save_config();
+                return Task::perform(
+                    async { Message::RefreshWeather },
+                    Action::App
+                );
+            }
+            Message::UpdateLatitude(value) => {
+                self.latitude_input = value.clone();
+                if let Ok(lat) = value.parse::<f64>() {
+                    if lat >= -90.0 && lat <= 90.0 {
+                        self.config.latitude = lat;
+                        self.save_config();
+                        return Task::perform(
+                            async { Message::RefreshWeather },
+                            Action::App
+                        );
+                    }
+                }
+            }
+            Message::UpdateLongitude(value) => {
+                self.longitude_input = value.clone();
+                if let Ok(lon) = value.parse::<f64>() {
+                    if lon >= -180.0 && lon <= 180.0 {
+                        self.config.longitude = lon;
+                        self.save_config();
+                        return Task::perform(
+                            async { Message::RefreshWeather },
+                            Action::App
+                        );
+                    }
+                }
+            }
+            Message::UpdateRefreshInterval(value) => {
+                self.refresh_input = value.clone();
+                if let Ok(interval) = value.parse::<u64>() {
+                    if interval >= 1 && interval <= 1440 {
+                        self.config.refresh_interval_minutes = interval;
+                        self.save_config();
+                    }
+                }
+            }
+            Message::ConfigUpdated(config) => {
+                self.config = config;
+            }
+        }
+        Task::none()
+    }
+
+    fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
+        Some(cosmic::applet::style())
+    }
+}
+
+impl Tempest {
+    fn save_config(&self) {
+        if let Some(ref handler) = self.config_handler {
+            if let Err(e) = self.config.write_entry(handler) {
+                eprintln!("Failed to save config: {}", e);
+            }
+        }
+    }
+}

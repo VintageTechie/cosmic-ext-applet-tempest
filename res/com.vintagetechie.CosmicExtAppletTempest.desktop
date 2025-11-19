@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Tempest
+Exec=cosmic-ext-applet-tempest %F
+Terminal=false
+Type=Application
+StartupNotify=true
+Icon=com.vintagetechie.CosmicExtAppletTempest
+Categories=COSMIC;
+Keywords=COSMIC
+MimeType=
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto

@@ -1,0 +1,50 @@
+[package]
+name = "cosmic-ext-applet-tempest"
+version = "0.0.1"
+edition = "2021"
+authors = ["VintageTechie (John Crenshaw) <john@vintagetechie.com>"]
+license = "GPL-3.0-only"
+description = "Weather applet for COSMIC Desktop with automatic location detection"
+
+[dependencies]
+async-stream = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+i18n-embed-fl = "0.9.1"
+open = "5.3.0"
+reqwest = { version = "0.12", features = ["json"] }
+rust-embed = "8.5.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["time"] }
+
+
+[dependencies.i18n-embed]
+version = "0.15"
+features = ["fluent-system", "desktop-requester"]
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic.git"
+default-features = false
+features = ["applet", "tokio", "wayland"]
+
+# # Uncomment to test a locally-cloned libcosmic
+# [patch.'https://github.com/pop-os/libcosmic']
+# libcosmic = { path = "../libcosmic" }
+
+[package.metadata.deb]
+license-file = "LICENSE"
+assets = [
+    ["target/release/cosmic-ext-applet-tempest", "usr/bin/", "755"],
+    ["res/com.vintagetechie.CosmicExtAppletTempest.desktop", "usr/share/applications/", "644"],
+    ["res/com.vintagetechie.CosmicExtAppletTempest.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["res/icons/hicolor/scalable/apps/com.vintagetechie.CosmicExtAppletTempest.svg", "usr/share/icons/hicolor/", "644"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/cosmic-ext-applet-tempest", dest = "/usr/bin/", mode = "755" },
+    { source = "LICENSE", dest = "/usr/share/doc/cosmic-ext-applet-tempest/LICENSE", doc = true, mode = "644" },
+    { source = "res/*.desktop", dest = "/usr/share/applications/", mode = "644" },
+    { source = "res/icons/hicolor/scalable/apps/com.vintagetechie.CosmicExtAppletTempest.svg", dest = "/usr/share/icons/scalable/apps/", mode = "644"},
+]
+
