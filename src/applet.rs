@@ -144,10 +144,11 @@ impl Application for Tempest {
     fn subscription(&self) -> Subscription<Self::Message> {
         struct TimerWorker;
 
+        let interval_minutes = self.config.refresh_interval_minutes;
         IcedSubscription::run_with_id(
             std::any::TypeId::of::<TimerWorker>(),
             async_stream::stream! {
-                let interval = Duration::from_secs(900); // Will be updated dynamically
+                let interval = Duration::from_secs(interval_minutes * 60);
                 loop {
                     tokio::time::sleep(interval).await;
                     yield Message::Tick;
