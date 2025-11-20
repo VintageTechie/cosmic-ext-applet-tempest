@@ -48,17 +48,17 @@ uninstall:
 # Installs files locally
 [no-cd]
 install-local:
-    install -Dm0755  ~/.local/bin/{{name}}
-    install -Dm0644  ${XDG_DATA_HOME:-~/.local/share}/{{desktop-path}}
-    install -Dm0644  ${XDG_DATA_HOME:-~/.local/share}/{{metainfo-path}}
-    install -Dm0644  ${XDG_DATA_HOME:-~/.local/share}/{{icons-dst}}
+    install -Dm0755 {{bin-src}} ~/.local/bin/{{name}}
+    install -Dm0644 {{desktop-src}} ${XDG_DATA_HOME:-~/.local/share}/applications/{{desktop}}
+    install -Dm0644 {{metainfo-src}} ${XDG_DATA_HOME:-~/.local/share}/metainfo/{{metainfo}}
+    install -Dm0644 {{icons-src}} ${XDG_DATA_HOME:-~/.local/share}/icons/hicolor/scalable/apps/{{icons}}
 
 # Uninstalls locally installed files
 uninstall-local:
     rm ~/.local/bin/{{name}}
-    rm ${XDG_DATA_HOME:-~/.local/share}/{{desktop-path}}
-    rm ${XDG_DATA_HOME:-~/.local/share}/{{metainfo-path}}
-    rm ${XDG_DATA_HOME:-~/.local/share}/{{icons-dst}}
+    rm ${XDG_DATA_HOME:-~/.local/share}/applications/{{desktop}}
+    rm ${XDG_DATA_HOME:-~/.local/share}/metainfo/{{metainfo}}
+    rm ${XDG_DATA_HOME:-~/.local/share}/icons/hicolor/scalable/apps/{{icons}}
 
 # Compiles and packages deb with release profile
 build-deb:

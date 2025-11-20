@@ -11,7 +11,7 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, detect_location, search_city, LocationResult};
 
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
@@ -27,9 +27,10 @@ pub struct Tempest {
     /// Config handler for persistence
     config_handler: Option<cosmic::cosmic_config::Config>,
     /// Input field states
-    latitude_input: String,
-    longitude_input: String,
+    city_input: String,
     refresh_input: String,
+    /// Search results
+    search_results: Vec<LocationResult>,
 }
 
 impl Default for Tempest {
@@ -39,9 +40,9 @@ impl Default for Tempest {
             core: Default::default(),
             popup: None,
             weather_data: None,
-            latitude_input: config.latitude.to_string(),
-            longitude_input: config.longitude.to_string(),
+            city_input: String::new(),
             refresh_input: config.refresh_interval_minutes.to_string(),
+            search_results: Vec::new(),
             config,
             config_handler: None,
         }
@@ -59,10 +60,15 @@ pub enum Message {
     WeatherUpdated(Result<WeatherData, String>),
     Tick,
     ToggleTemperatureUnit,
-    UpdateLatitude(String),
-    UpdateLongitude(String),
+    UpdateCityInput(String),
+    SearchCity,
+    CitySearchResult(Result<Vec<LocationResult>, String>),
+    SelectLocation(usize),
     UpdateRefreshInterval(String),
     ConfigUpdated(Config),
+    DetectLocation,
+    LocationDetected(Result<(f64, f64, String), String>),
+    ToggleAutoLocation,
 }
 
 /// Implement the `Application` trait for your application.
@@ -104,25 +110,33 @@ impl Application for Tempest {
             .and_then(|h| Config::get_entry(h).ok())
             .unwrap_or_default();
 
-        let latitude_input = config.latitude.to_string();
-        let longitude_input = config.longitude.to_string();
         let refresh_input = config.refresh_interval_minutes.to_string();
 
         let app = Tempest {
             core,
-            config,
+            config: config.clone(),
             config_handler,
-            latitude_input,
-            longitude_input,
+            city_input: String::new(),
             refresh_input,
+            search_results: Vec::new(),
             ..Default::default()
         };
 
-        // Start with initial weather fetch
-        let task = Task::perform(
-            async { Message::RefreshWeather },
-            Action::App
-        );
+        // Start with auto-location if enabled, otherwise fetch weather
+        let task = if config.use_auto_location {
+            Task::perform(
+                async {
+                    detect_location().await
+                        .map_err(|e| e.to_string())
+                },
+                |result| Action::App(Message::LocationDetected(result)),
+            )
+        } else {
+            Task::perform(
+                async { Message::RefreshWeather },
+                Action::App
+            )
+        };
 
         (app, task)
     }
@@ -212,19 +226,48 @@ impl Application for Tempest {
 
             column = column.push(
                 settings::item(
-                    "Latitude",
-                    widget::text_input("Latitude", &self.latitude_input)
-                        .on_input(Message::UpdateLatitude)
+                    "Auto-detect Location",
+                    widget::row()
+                        .spacing(10)
+                        .push(widget::toggler(self.config.use_auto_location)
+                            .on_toggle(|_| Message::ToggleAutoLocation))
+                        .push(widget::button::standard("Detect Now")
+                            .on_press(Message::DetectLocation))
                 )
             );
 
             column = column.push(
                 settings::item(
-                    "Longitude",
-                    widget::text_input("Longitude", &self.longitude_input)
-                        .on_input(Message::UpdateLongitude)
+                    "Current Location",
+                    text(&self.config.location_name)
                 )
             );
+
+            if !self.config.use_auto_location {
+                column = column.push(text("Search Location").size(14));
+                column = column.push(
+                    widget::row()
+                        .spacing(10)
+                        .padding([0, 20])
+                        .push(widget::text_input("Enter city name...", &self.city_input)
+                            .on_input(Message::UpdateCityInput)
+                            .on_submit(|_| Message::SearchCity)
+                            .width(cosmic::iced::Length::Fill))
+                        .push(widget::button::standard("Search")
+                            .on_press(Message::SearchCity))
+                );
+
+                if !self.search_results.is_empty() {
+                    for (idx, result) in self.search_results.iter().enumerate() {
+                        column = column.push(
+                            widget::button::text(&result.display_name)
+                                .on_press(Message::SelectLocation(idx))
+                                .padding(8)
+                                .width(cosmic::iced::Length::Fill)
+                        );
+                    }
+                }
+            }
 
             column = column.push(
                 settings::item(
@@ -318,30 +361,45 @@ impl Application for Tempest {
                     Action::App
                 );
             }
-            Message::UpdateLatitude(value) => {
-                self.latitude_input = value.clone();
-                if let Ok(lat) = value.parse::<f64>() {
-                    if lat >= -90.0 && lat <= 90.0 {
-                        self.config.latitude = lat;
-                        self.save_config();
-                        return Task::perform(
-                            async { Message::RefreshWeather },
-                            Action::App
-                        );
+            Message::UpdateCityInput(value) => {
+                self.city_input = value;
+            }
+            Message::SearchCity => {
+                let city = self.city_input.clone();
+                if !city.is_empty() {
+                    return Task::perform(
+                        async move {
+                            search_city(&city).await
+                                .map_err(|e| e.to_string())
+                        },
+                        |result| Action::App(Message::CitySearchResult(result)),
+                    );
+                }
+            }
+            Message::CitySearchResult(result) => {
+                match result {
+                    Ok(results) => {
+                        self.search_results = results;
+                    }
+                    Err(e) => {
+                        eprintln!("City search failed: {}", e);
+                        self.search_results.clear();
                     }
                 }
             }
-            Message::UpdateLongitude(value) => {
-                self.longitude_input = value.clone();
-                if let Ok(lon) = value.parse::<f64>() {
-                    if lon >= -180.0 && lon <= 180.0 {
-                        self.config.longitude = lon;
-                        self.save_config();
-                        return Task::perform(
-                            async { Message::RefreshWeather },
-                            Action::App
-                        );
-                    }
+            Message::SelectLocation(idx) => {
+                if let Some(location) = self.search_results.get(idx) {
+                    self.config.latitude = location.latitude;
+                    self.config.longitude = location.longitude;
+                    self.config.location_name = location.display_name.clone();
+                    self.config.use_auto_location = false;
+                    self.city_input.clear();
+                    self.search_results.clear();
+                    self.save_config();
+                    return Task::perform(
+                        async { Message::RefreshWeather },
+                        Action::App
+                    );
                 }
             }
             Message::UpdateRefreshInterval(value) => {
@@ -355,6 +413,46 @@ impl Application for Tempest {
             }
             Message::ConfigUpdated(config) => {
                 self.config = config;
+            }
+            Message::ToggleAutoLocation => {
+                self.config.use_auto_location = !self.config.use_auto_location;
+                self.save_config();
+
+                if self.config.use_auto_location {
+                    return Task::perform(
+                        async {
+                            detect_location().await
+                                .map_err(|e| e.to_string())
+                        },
+                        |result| Action::App(Message::LocationDetected(result)),
+                    );
+                }
+            }
+            Message::DetectLocation => {
+                return Task::perform(
+                    async {
+                        detect_location().await
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| Action::App(Message::LocationDetected(result)),
+                );
+            }
+            Message::LocationDetected(result) => {
+                match result {
+                    Ok((lat, lon, location_name)) => {
+                        self.config.latitude = lat;
+                        self.config.longitude = lon;
+                        self.config.location_name = location_name;
+                        self.save_config();
+                        return Task::perform(
+                            async { Message::RefreshWeather },
+                            Action::App
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to detect location: {}", e);
+                    }
+                }
             }
         }
         Task::none()

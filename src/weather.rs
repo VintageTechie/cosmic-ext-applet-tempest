@@ -80,6 +80,106 @@ pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str
     })
 }
 
+/// IP-API.com response structure for geolocation
+#[derive(Debug, Deserialize)]
+struct IpApiResponse {
+    status: String,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    city: Option<String>,
+    #[serde(rename = "regionName")]
+    region_name: Option<String>,
+    country: Option<String>,
+}
+
+/// Open-Meteo Geocoding API response structure
+#[derive(Debug, Deserialize)]
+struct GeocodingResponse {
+    results: Option<Vec<GeocodingResult>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeocodingResult {
+    name: String,
+    latitude: f64,
+    longitude: f64,
+    country: Option<String>,
+    admin1: Option<String>,
+}
+
+/// Location search result for display
+#[derive(Debug, Clone)]
+pub struct LocationResult {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub display_name: String,
+}
+
+impl LocationResult {
+    fn from_geocoding_result(result: &GeocodingResult) -> Self {
+        let display_name = match (&result.admin1, &result.country) {
+            (Some(admin), Some(country)) => format!("{}, {}, {}", result.name, admin, country),
+            (None, Some(country)) => format!("{}, {}", result.name, country),
+            _ => result.name.clone(),
+        };
+
+        Self {
+            latitude: result.latitude,
+            longitude: result.longitude,
+            display_name,
+        }
+    }
+}
+
+/// Searches for a location by city name using Open-Meteo Geocoding API
+pub async fn search_city(city_name: &str) -> Result<Vec<LocationResult>, Box<dyn std::error::Error>> {
+    let url = format!(
+        "https://geocoding-api.open-meteo.com/v1/search?name={}&count=10&language=en&format=json",
+        urlencoding::encode(city_name)
+    );
+
+    let response = reqwest::get(&url).await?;
+    let data: GeocodingResponse = response.json().await?;
+
+    if let Some(results) = data.results {
+        if !results.is_empty() {
+            let locations: Vec<LocationResult> = results
+                .iter()
+                .map(LocationResult::from_geocoding_result)
+                .collect();
+
+            eprintln!("Found {} location(s) for '{}'", locations.len(), city_name);
+            return Ok(locations);
+        }
+    }
+
+    Err(format!("No results found for '{}'", city_name).into())
+}
+
+/// Detects user location automatically using IP-based geolocation
+pub async fn detect_location() -> Result<(f64, f64, String), Box<dyn std::error::Error>> {
+    let url = "http://ip-api.com/json/?fields=status,lat,lon,city,regionName,country";
+
+    let response = reqwest::get(url).await?;
+    let data: IpApiResponse = response.json().await?;
+
+    if data.status == "success" {
+        if let (Some(lat), Some(lon)) = (data.lat, data.lon) {
+            let location_name = match (data.city, data.region_name, data.country) {
+                (Some(city), _, Some(country)) => format!("{}, {}", city, country),
+                (_, Some(region), Some(country)) => format!("{}, {}", region, country),
+                (_, _, Some(country)) => country,
+                _ => "Unknown".to_string(),
+            };
+
+            eprintln!("Auto-detected location: {}, {} ({})", lat, lon, location_name);
+            return Ok((lat, lon, location_name));
+        }
+    }
+
+    Err("Failed to detect location from IP address".into())
+}
+
 /// Converts WMO weather codes to human-readable descriptions
 pub fn weathercode_to_description(code: i32) -> &'static str {
     match code {
