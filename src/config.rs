@@ -50,8 +50,10 @@ impl TemperatureUnit {
 pub struct Config {
     pub latitude: f64,
     pub longitude: f64,
+    pub location_name: String,
     pub temperature_unit: TemperatureUnit,
     pub refresh_interval_minutes: u64,
+    pub use_auto_location: bool,
 }
 
 impl Default for Config {
@@ -59,8 +61,10 @@ impl Default for Config {
         Self {
             latitude: 40.7128,
             longitude: -74.0060,
+            location_name: "New York, NY, United States".to_string(),
             temperature_unit: TemperatureUnit::default(),
             refresh_interval_minutes: 15,
+            use_auto_location: false,
         }
     }
 }
