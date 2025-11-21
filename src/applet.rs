@@ -11,7 +11,7 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, detect_location, search_city, LocationResult};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon, detect_location, search_city, LocationResult};
 
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
@@ -31,6 +31,8 @@ pub struct Tempest {
     refresh_input: String,
     /// Search results
     search_results: Vec<LocationResult>,
+    /// Display label for panel button
+    display_label: String,
 }
 
 impl Default for Tempest {
@@ -43,6 +45,7 @@ impl Default for Tempest {
             city_input: String::new(),
             refresh_input: config.refresh_interval_minutes.to_string(),
             search_results: Vec::new(),
+            display_label: "...".to_string(),
             config,
             config_handler: None,
         }
@@ -119,6 +122,7 @@ impl Application for Tempest {
             city_input: String::new(),
             refresh_input,
             search_results: Vec::new(),
+            display_label: "...".to_string(),
             ..Default::default()
         };
 
@@ -167,20 +171,35 @@ impl Application for Tempest {
     /// it has a `Message` associated with it, which dictates what type of message it can send.
     ///
     /// To get a better sense of which widgets are available, check out the `widget` module.
-    fn view(&self) -> Element<Self::Message> {
-        let label = if let Some(ref weather) = self.weather_data {
-            format!("{:.0}{}", weather.current.temperature, self.config.temperature_unit.symbol())
+    fn view(&self) -> Element<'_, Self::Message> {
+        use cosmic::iced::Alignment;
+
+        let temperature_text = text(&self.display_label);
+
+        let data = if self.core.applet.is_horizontal() {
+            Element::from(
+                widget::row()
+                    .push(temperature_text)
+                    .align_y(Alignment::Center)
+                    .spacing(4),
+            )
         } else {
-            "...".to_string()
+            Element::from(
+                widget::column()
+                    .push(temperature_text)
+                    .align_x(Alignment::Center)
+                    .spacing(4),
+            )
         };
 
-        widget::button::standard(label)
-            .on_press(Message::TogglePopup)
-            .padding(8)
-            .into()
+        let button = widget::button::custom(data)
+            .class(cosmic::theme::Button::AppletIcon)
+            .on_press(Message::TogglePopup);
+
+        widget::autosize::autosize(button, widget::Id::unique()).into()
     }
 
-    fn view_window(&self, _id: Id) -> Element<Self::Message> {
+    fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
         let content = if let Some(ref weather) = self.weather_data {
             let mut column = widget::column().spacing(10).padding(10).max_width(450);
 
@@ -338,10 +357,15 @@ impl Application for Tempest {
             Message::WeatherUpdated(result) => {
                 match result {
                     Ok(data) => {
+                        let icon = weathercode_to_icon(data.current.weathercode);
+                        let temp = format!("{:.0}{}", data.current.temperature, self.config.temperature_unit.symbol());
+                        self.display_label = format!("{} {}", icon, temp);
+                        println!("Updated display label: '{}' (len: {})", self.display_label, self.display_label.len());
                         self.weather_data = Some(data);
                     }
                     Err(e) => {
                         eprintln!("Failed to fetch weather: {}", e);
+                        self.display_label = "...".to_string();
                     }
                 }
             }

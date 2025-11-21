@@ -199,3 +199,23 @@ pub fn weathercode_to_description(code: i32) -> &'static str {
         _ => "Unknown",
     }
 }
+
+/// Converts WMO weather codes to weather icons
+pub fn weathercode_to_icon(code: i32) -> &'static str {
+    match code {
+        0 => "☀",
+        1 => "🌤",
+        2 => "⛅",
+        3 => "☁",
+        45 | 48 => "🌫",
+        51 | 53 | 55 => "🌦",
+        61 | 63 | 65 => "🌧",
+        71 | 73 | 75 => "🌨",
+        77 => "🌨",
+        80 | 81 | 82 => "🌧",
+        85 | 86 => "🌨",
+        95 => "⛈",
+        96 | 99 => "⛈",
+        _ => "🌡",
+    }
+}
