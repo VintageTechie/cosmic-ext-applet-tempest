@@ -11,7 +11,7 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, format_hour, detect_location, search_city, LocationResult};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, format_hour, format_time, detect_location, search_city, LocationResult};
 
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
@@ -283,8 +283,6 @@ impl Application for Tempest {
             );
         } else if let Some(ref weather) = self.weather_data {
             // Current conditions
-
-            // Current conditions
             column = column.push(
                 widget::row()
                     .spacing(10)
@@ -292,9 +290,27 @@ impl Application for Tempest {
                     .push(text(weathercode_to_description(weather.current.weathercode)))
             );
 
+            // Additional current conditions
+            column = column.push(
+                widget::row()
+                    .spacing(20)
+                    .push(text(format!("Feels like: {:.0}{}", weather.current.feels_like, self.config.temperature_unit.symbol())).size(14))
+                    .push(text(format!("Humidity: {}%", weather.current.humidity)).size(14))
+            );
+
             column = column.push(
                 text(format!("Wind: {:.1} mph", weather.current.windspeed)).size(14)
             );
+
+            // Sunrise/Sunset for today
+            if let Some(first_day) = weather.forecast.first() {
+                column = column.push(
+                    widget::row()
+                        .spacing(20)
+                        .push(text(format!("☀️ Sunrise: {}", format_time(&first_day.sunrise))).size(14))
+                        .push(text(format!("🌙 Sunset: {}", format_time(&first_day.sunset))).size(14))
+                );
+            }
 
             column = column.push(widget::divider::horizontal::default());
 

@@ -8,6 +8,8 @@ pub struct CurrentWeather {
     pub temperature: f32,
     pub weathercode: i32,
     pub windspeed: f32,
+    pub humidity: i32,
+    pub feels_like: f32,
 }
 
 /// Daily forecast data
@@ -17,6 +19,8 @@ pub struct DailyForecast {
     pub temp_max: f32,
     pub temp_min: f32,
     pub weathercode: i32,
+    pub sunrise: String,
+    pub sunset: String,
 }
 
 /// Hourly forecast data
@@ -50,6 +54,8 @@ struct CurrentData {
     temperature_2m: f32,
     weathercode: i32,
     windspeed_10m: f32,
+    relative_humidity_2m: i32,
+    apparent_temperature: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,12 +72,14 @@ struct DailyData {
     temperature_2m_max: Vec<f32>,
     temperature_2m_min: Vec<f32>,
     weathercode: Vec<i32>,
+    sunrise: Vec<String>,
+    sunset: Vec<String>,
 }
 
 /// Fetches weather data from Open-Meteo API
 pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str) -> Result<WeatherData, Box<dyn std::error::Error>> {
     let url = format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode&temperature_unit={}&windspeed_unit=mph&forecast_days=7&forecast_hours=24",
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m,apparent_temperature&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&temperature_unit={}&windspeed_unit=mph&timezone=auto&forecast_days=7&forecast_hours=24",
         latitude, longitude, temperature_unit
     );
 
@@ -97,6 +105,8 @@ pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str
             temp_max: data.daily.temperature_2m_max[i],
             temp_min: data.daily.temperature_2m_min[i],
             weathercode: data.daily.weathercode[i],
+            sunrise: data.daily.sunrise[i].clone(),
+            sunset: data.daily.sunset[i].clone(),
         });
     }
 
@@ -105,6 +115,8 @@ pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str
             temperature: data.current.temperature_2m,
             weathercode: data.current.weathercode,
             windspeed: data.current.windspeed_10m,
+            humidity: data.current.relative_humidity_2m,
+            feels_like: data.current.apparent_temperature,
         },
         hourly,
         forecast,
@@ -251,6 +263,33 @@ pub fn format_hour(time_str: &str) -> String {
                         (hour - 12, "PM")
                     };
                     return format!("{}:00 {}", display_hour, period);
+                }
+            }
+        }
+        time_str.to_string()
+    }
+}
+
+/// Formats ISO timestamp to time (e.g., "2025-01-20T06:30:00" -> "6:30 AM")
+pub fn format_time(time_str: &str) -> String {
+    if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(time_str) {
+        datetime.format("%I:%M %p").to_string().trim_start_matches('0').to_string()
+    } else {
+        // Fallback: try to extract time from string like "2025-01-20T06:30:00"
+        if let Some(time_part) = time_str.split('T').nth(1) {
+            let time_components: Vec<&str> = time_part.split(':').collect();
+            if time_components.len() >= 2 {
+                if let (Ok(hour), Ok(minute)) = (time_components[0].parse::<u32>(), time_components[1].parse::<u32>()) {
+                    let (display_hour, period) = if hour == 0 {
+                        (12, "AM")
+                    } else if hour < 12 {
+                        (hour, "AM")
+                    } else if hour == 12 {
+                        (12, "PM")
+                    } else {
+                        (hour - 12, "PM")
+                    };
+                    return format!("{}:{:02} {}", display_hour, minute, period);
                 }
             }
         }
