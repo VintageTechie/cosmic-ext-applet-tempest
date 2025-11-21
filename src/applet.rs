@@ -11,7 +11,7 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, format_hour, format_time, detect_location, search_city, LocationResult};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, format_hour, format_time, wind_direction_to_compass, detect_location, search_city, LocationResult};
 
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
@@ -326,8 +326,27 @@ impl Application for Tempest {
                     .push(text(format!("Humidity: {}%", weather.current.humidity)).size(14))
             );
 
+            // Wind information
             column = column.push(
-                text(format!("Wind: {:.1} mph", weather.current.windspeed)).size(14)
+                widget::row()
+                    .spacing(20)
+                    .push(text(format!("Wind: {:.1} mph {}", weather.current.windspeed, wind_direction_to_compass(weather.current.wind_direction))).size(14))
+                    .push(text(format!("Gusts: {:.1} mph", weather.current.wind_gusts)).size(14))
+            );
+
+            // Additional weather details
+            column = column.push(
+                widget::row()
+                    .spacing(20)
+                    .push(text(format!("UV Index: {:.1}", weather.current.uv_index)).size(14))
+                    .push(text(format!("Cloud Cover: {}%", weather.current.cloud_cover)).size(14))
+            );
+
+            column = column.push(
+                widget::row()
+                    .spacing(20)
+                    .push(text(format!("Visibility: {:.1} mi", weather.current.visibility / 1609.34)).size(14))
+                    .push(text(format!("Pressure: {:.0} hPa", weather.current.pressure)).size(14))
             );
 
             // Sunrise/Sunset for today

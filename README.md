@@ -9,7 +9,10 @@ A weather applet for COSMIC Desktop with automatic location detection.
 - Detailed popup showing:
   - Location name and manual refresh button in header
   - Last updated timestamp
-  - Current conditions (temperature, feels-like, humidity, wind speed)
+  - Current conditions (temperature, feels-like, humidity)
+  - Wind information (speed, direction, gusts)
+  - UV index and cloud cover
+  - Visibility and atmospheric pressure
   - Sunrise and sunset times
   - Collapsible hourly forecast (next 12 hours)
   - Collapsible 7-day forecast with high/low temperatures

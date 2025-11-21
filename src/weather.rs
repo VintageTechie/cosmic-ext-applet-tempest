@@ -10,6 +10,12 @@ pub struct CurrentWeather {
     pub windspeed: f32,
     pub humidity: i32,
     pub feels_like: f32,
+    pub wind_direction: i32,
+    pub wind_gusts: f32,
+    pub uv_index: f32,
+    pub visibility: f32,
+    pub pressure: f32,
+    pub cloud_cover: i32,
 }
 
 /// Daily forecast data
@@ -56,6 +62,12 @@ struct CurrentData {
     windspeed_10m: f32,
     relative_humidity_2m: i32,
     apparent_temperature: f32,
+    wind_direction_10m: i32,
+    wind_gusts_10m: f32,
+    uv_index: f32,
+    visibility: f32,
+    surface_pressure: f32,
+    cloud_cover: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,7 +91,7 @@ struct DailyData {
 /// Fetches weather data from Open-Meteo API
 pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str) -> Result<WeatherData, Box<dyn std::error::Error>> {
     let url = format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m,apparent_temperature&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&temperature_unit={}&windspeed_unit=mph&timezone=auto&forecast_days=7&forecast_hours=24",
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m,apparent_temperature,wind_direction_10m,wind_gusts_10m,uv_index,visibility,surface_pressure,cloud_cover&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&temperature_unit={}&windspeed_unit=mph&timezone=auto&forecast_days=7&forecast_hours=24",
         latitude, longitude, temperature_unit
     );
 
@@ -117,6 +129,12 @@ pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str
             windspeed: data.current.windspeed_10m,
             humidity: data.current.relative_humidity_2m,
             feels_like: data.current.apparent_temperature,
+            wind_direction: data.current.wind_direction_10m,
+            wind_gusts: data.current.wind_gusts_10m,
+            uv_index: data.current.uv_index,
+            visibility: data.current.visibility,
+            pressure: data.current.surface_pressure,
+            cloud_cover: data.current.cloud_cover,
         },
         hourly,
         forecast,
@@ -294,6 +312,21 @@ pub fn format_time(time_str: &str) -> String {
             }
         }
         time_str.to_string()
+    }
+}
+
+/// Converts wind direction in degrees to compass direction
+pub fn wind_direction_to_compass(degrees: i32) -> &'static str {
+    match degrees {
+        0..=22 | 338..=360 => "N",
+        23..=67 => "NE",
+        68..=112 => "E",
+        113..=157 => "SE",
+        158..=202 => "S",
+        203..=247 => "SW",
+        248..=292 => "W",
+        293..=337 => "NW",
+        _ => "N",
     }
 }
 
