@@ -11,7 +11,7 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon, detect_location, search_city, LocationResult};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, detect_location, search_city, LocationResult};
 
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
@@ -33,6 +33,12 @@ pub struct Tempest {
     search_results: Vec<LocationResult>,
     /// Display label for panel button
     display_label: String,
+    /// Current weather code for icon display
+    current_weathercode: i32,
+    /// Loading state
+    is_loading: bool,
+    /// Error state
+    error_message: Option<String>,
 }
 
 impl Default for Tempest {
@@ -46,6 +52,9 @@ impl Default for Tempest {
             refresh_input: config.refresh_interval_minutes.to_string(),
             search_results: Vec::new(),
             display_label: "...".to_string(),
+            current_weathercode: 0,
+            is_loading: true,
+            error_message: None,
             config,
             config_handler: None,
         }
@@ -68,7 +77,6 @@ pub enum Message {
     CitySearchResult(Result<Vec<LocationResult>, String>),
     SelectLocation(usize),
     UpdateRefreshInterval(String),
-    ConfigUpdated(Config),
     DetectLocation,
     LocationDetected(Result<(f64, f64, String), String>),
     ToggleAutoLocation,
@@ -146,11 +154,11 @@ impl Application for Tempest {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        struct TimerWorker;
-
         let interval_minutes = self.config.refresh_interval_minutes;
+
+        // Use the interval value as part of the ID so subscription restarts when it changes
         IcedSubscription::run_with_id(
-            std::any::TypeId::of::<TimerWorker>(),
+            (std::any::TypeId::of::<Self>(), interval_minutes),
             async_stream::stream! {
                 let interval = Duration::from_secs(interval_minutes * 60);
                 loop {
@@ -173,12 +181,28 @@ impl Application for Tempest {
     /// To get a better sense of which widgets are available, check out the `widget` module.
     fn view(&self) -> Element<'_, Self::Message> {
         use cosmic::iced::Alignment;
+        use chrono::{Local, Timelike};
+
+        // Determine if it's night time (6pm to 6am)
+        let is_night = matches!(Local::now().hour(), 18..24 | 0..6);
+
+        // Use error icon if there's an error, otherwise use weather icon
+        let icon_name = if self.error_message.is_some() {
+            "dialog-error-symbolic"
+        } else {
+            weathercode_to_icon_name(self.current_weathercode, is_night)
+        };
+
+        let icon = widget::icon::from_name(icon_name)
+            .size(16)
+            .symbolic(true);
 
         let temperature_text = text(&self.display_label);
 
         let data = if self.core.applet.is_horizontal() {
             Element::from(
                 widget::row()
+                    .push(icon)
                     .push(temperature_text)
                     .align_y(Alignment::Center)
                     .spacing(4),
@@ -186,6 +210,7 @@ impl Application for Tempest {
         } else {
             Element::from(
                 widget::column()
+                    .push(icon)
                     .push(temperature_text)
                     .align_x(Alignment::Center)
                     .spacing(4),
@@ -196,12 +221,58 @@ impl Application for Tempest {
             .class(cosmic::theme::Button::AppletIcon)
             .on_press(Message::TogglePopup);
 
-        widget::autosize::autosize(button, widget::Id::unique()).into()
+        let tooltip_text = if let Some(ref error) = self.error_message {
+            format!("Error: {}", error)
+        } else if self.weather_data.is_some() {
+            format!("{} - {}",
+                weathercode_to_description(self.current_weathercode),
+                self.config.location_name
+            )
+        } else {
+            "Loading...".to_string()
+        };
+
+        let button_with_tooltip = widget::tooltip(
+            button,
+            text(tooltip_text),
+            widget::tooltip::Position::Bottom
+        );
+
+        widget::autosize::autosize(button_with_tooltip, widget::Id::unique()).into()
     }
 
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
-        let content = if let Some(ref weather) = self.weather_data {
-            let mut column = widget::column().spacing(10).padding(10).max_width(450);
+        let mut column = widget::column().spacing(10).padding(10).max_width(450);
+
+        // Show error message if there is one
+        if let Some(ref error) = self.error_message {
+            column = column.push(
+                widget::container(
+                    widget::column()
+                        .spacing(10)
+                        .push(widget::icon::from_name("dialog-error-symbolic").size(48))
+                        .push(text("Failed to load weather").size(18))
+                        .push(text(error).size(14))
+                        .push(
+                            widget::button::standard("Retry")
+                                .on_press(Message::RefreshWeather)
+                        )
+                )
+                .align_x(cosmic::iced::alignment::Horizontal::Center)
+                .width(cosmic::iced::Length::Fill)
+            );
+        } else if self.is_loading {
+            column = column.push(
+                widget::container(
+                    widget::column()
+                        .spacing(10)
+                        .push(text("Loading weather data...").size(18))
+                )
+                .align_x(cosmic::iced::alignment::Horizontal::Center)
+                .width(cosmic::iced::Length::Fill)
+            );
+        } else if let Some(ref weather) = self.weather_data {
+            // Current conditions
 
             // Current conditions
             column = column.push(
@@ -296,16 +367,9 @@ impl Application for Tempest {
                         .on_input(Message::UpdateRefreshInterval)
                 )
             );
+        }
 
-            column
-        } else {
-            widget::column()
-                .spacing(10)
-                .padding(10)
-                .push(text("Loading weather data..."))
-        };
-
-        let scrollable = widget::scrollable(content)
+        let scrollable = widget::scrollable(column)
             .height(cosmic::iced::Length::Fill);
 
         self.core.applet.popup_container(scrollable).into()
@@ -343,6 +407,9 @@ impl Application for Tempest {
                 }
             }
             Message::RefreshWeather => {
+                self.is_loading = true;
+                self.error_message = None;
+
                 let lat = self.config.latitude;
                 let lon = self.config.longitude;
                 let temp_unit = self.config.temperature_unit.api_param().to_string();
@@ -355,17 +422,21 @@ impl Application for Tempest {
                 );
             }
             Message::WeatherUpdated(result) => {
+                self.is_loading = false;
+
                 match result {
                     Ok(data) => {
-                        let icon = weathercode_to_icon(data.current.weathercode);
+                        self.current_weathercode = data.current.weathercode;
                         let temp = format!("{:.0}{}", data.current.temperature, self.config.temperature_unit.symbol());
-                        self.display_label = format!("{} {}", icon, temp);
-                        println!("Updated display label: '{}' (len: {})", self.display_label, self.display_label.len());
+                        self.display_label = temp;
                         self.weather_data = Some(data);
+                        self.error_message = None;
                     }
                     Err(e) => {
                         eprintln!("Failed to fetch weather: {}", e);
-                        self.display_label = "...".to_string();
+                        self.display_label = "ERR".to_string();
+                        self.current_weathercode = 0;
+                        self.error_message = Some(e);
                     }
                 }
             }
@@ -435,9 +506,6 @@ impl Application for Tempest {
                         self.save_config();
                     }
                 }
-            }
-            Message::ConfigUpdated(config) => {
-                self.config = config;
             }
             Message::ToggleAutoLocation => {
                 self.config.use_auto_location = !self.config.use_auto_location;

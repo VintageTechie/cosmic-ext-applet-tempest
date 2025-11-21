@@ -200,22 +200,37 @@ pub fn weathercode_to_description(code: i32) -> &'static str {
     }
 }
 
-/// Converts WMO weather codes to weather icons
-pub fn weathercode_to_icon(code: i32) -> &'static str {
+/// Converts WMO weather codes to freedesktop icon names
+/// https://specifications.freedesktop.org/icon-naming-spec/latest/
+pub fn weathercode_to_icon_name(code: i32, is_night: bool) -> &'static str {
     match code {
-        0 => "☀",
-        1 => "🌤",
-        2 => "⛅",
-        3 => "☁",
-        45 | 48 => "🌫",
-        51 | 53 | 55 => "🌦",
-        61 | 63 | 65 => "🌧",
-        71 | 73 | 75 => "🌨",
-        77 => "🌨",
-        80 | 81 | 82 => "🌧",
-        85 | 86 => "🌨",
-        95 => "⛈",
-        96 | 99 => "⛈",
-        _ => "🌡",
+        // Clear sky
+        0 => if is_night { "weather-clear-night" } else { "weather-clear" },
+        // Mainly clear
+        1 => if is_night { "weather-few-clouds-night" } else { "weather-few-clouds" },
+        // Partly cloudy
+        2 => if is_night { "weather-few-clouds-night" } else { "weather-few-clouds" },
+        // Overcast
+        3 => "weather-overcast",
+        // Fog and depositing rime fog
+        45 | 48 => "weather-fog",
+        // Drizzle: Light, moderate, and dense intensity
+        51 | 53 | 55 => "weather-showers-scattered",
+        // Rain: Slight, moderate and heavy intensity
+        61 | 63 | 65 => "weather-showers",
+        // Snow fall: Slight, moderate, and heavy intensity
+        71 | 73 | 75 => "weather-snow",
+        // Snow grains
+        77 => "weather-snow",
+        // Rain showers: Slight, moderate, and violent
+        80 | 81 | 82 => "weather-showers",
+        // Snow showers slight and heavy
+        85 | 86 => "weather-snow",
+        // Thunderstorm
+        95 => "weather-storm",
+        // Thunderstorm with slight and heavy hail
+        96 | 99 => "weather-storm",
+        // Unknown
+        _ => "weather-severe-alert",
     }
 }
