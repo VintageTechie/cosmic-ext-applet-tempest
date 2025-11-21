@@ -11,16 +11,16 @@
 - [x] Manual refresh button to UI
 - [x] Last updated timestamp display
 - [x] Loading spinner for better visual feedback
-
-## Additional Weather Features
-- [ ] Add wind direction with compass (N, NE, E, etc.)
-- [ ] Add wind gusts information
-- [ ] Add UV index display
-- [ ] Add visibility information
-- [ ] Add pressure information
-- [ ] Add cloud cover percentage
+- [x] Wind direction with compass (N, NE, E, etc.)
+- [x] Wind gusts information
+- [x] UV index display
+- [x] Visibility information
+- [x] Pressure information
+- [x] Cloud cover percentage
 
 ## Distribution & Packaging
+- [ ] Add version display in UI
+- [ ] Add tip me link to Ko-fi in about/settings
 - [ ] Create Flatpak manifest and packaging
 - [ ] Research COSMIC Applet Store submission process
 - [ ] Submit applet to COSMIC Applet Store
