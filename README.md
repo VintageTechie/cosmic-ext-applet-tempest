@@ -53,6 +53,8 @@ Click the applet to open the popup, which includes a settings section where you 
 - Toggle temperature unit (Fahrenheit/Celsius)
 - Enter custom latitude and longitude
 - Set refresh interval (in minutes)
+- View current version
+- Support development via Ko-fi
 
 Settings are automatically saved and will persist across sessions. The applet defaults to New York City coordinates (40.7128, -74.0060).
 
