@@ -254,6 +254,32 @@ impl Application for Tempest {
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
         let mut column = widget::column().spacing(10).padding(10).max_width(450);
 
+        // Add header with location name and refresh button
+        let header = widget::row()
+            .spacing(10)
+            .push(text(&self.config.location_name).size(16))
+            .push(widget::horizontal_space())
+            .push(
+                widget::button::icon(widget::icon::from_name("view-refresh-symbolic"))
+                    .on_press(Message::RefreshWeather)
+                    .padding(8)
+            );
+        column = column.push(header);
+
+        // Add last updated timestamp if available
+        if let Some(timestamp) = self.config.last_updated {
+            if let Some(datetime) = chrono::DateTime::from_timestamp(timestamp, 0) {
+                let local_time: chrono::DateTime<chrono::Local> = datetime.into();
+                let formatted_time = local_time.format("%I:%M %p").to_string().trim_start_matches('0').to_string();
+                column = column.push(
+                    text(format!("Updated: {}", formatted_time))
+                        .size(12)
+                );
+            }
+        }
+
+        column = column.push(widget::divider::horizontal::default());
+
         // Show error message if there is one
         if let Some(ref error) = self.error_message {
             column = column.push(
@@ -276,6 +302,8 @@ impl Application for Tempest {
                 widget::container(
                     widget::column()
                         .spacing(10)
+                        .align_x(cosmic::iced::alignment::Horizontal::Center)
+                        .push(widget::icon::from_name("content-loading-symbolic").size(48))
                         .push(text("Loading weather data...").size(18))
                 )
                 .align_x(cosmic::iced::alignment::Horizontal::Center)
@@ -494,6 +522,10 @@ impl Application for Tempest {
                         self.display_label = temp;
                         self.weather_data = Some(data);
                         self.error_message = None;
+
+                        // Update last updated timestamp
+                        self.config.last_updated = Some(chrono::Local::now().timestamp());
+                        self.save_config();
                     }
                     Err(e) => {
                         eprintln!("Failed to fetch weather: {}", e);

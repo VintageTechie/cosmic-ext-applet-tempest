@@ -7,8 +7,12 @@ A weather applet for COSMIC Desktop with automatic location detection.
 - Real-time weather data from Open-Meteo API (no API key required)
 - Current temperature displayed in panel
 - Detailed popup showing:
-  - Current conditions (temperature, weather description, wind speed)
-  - 7-day forecast with high/low temperatures
+  - Location name and manual refresh button in header
+  - Last updated timestamp
+  - Current conditions (temperature, feels-like, humidity, wind speed)
+  - Sunrise and sunset times
+  - Collapsible hourly forecast (next 12 hours)
+  - Collapsible 7-day forecast with high/low temperatures
 - Configurable settings:
   - Temperature unit (Fahrenheit/Celsius)
   - Location (latitude/longitude)
@@ -49,7 +53,7 @@ Click the applet to open the popup, which includes a settings section where you 
 
 Settings are automatically saved and will persist across sessions. The applet defaults to New York City coordinates (40.7128, -74.0060).
 
-Automatic location detection will be added in a future release.
+The applet supports automatic location detection via IP geolocation.
 
 ## Development
 

@@ -1,15 +1,16 @@
 # TODO List for Cosmic Weather Applet (Tempest)
 
 ## Current Work In Progress
-- [ ] Test enhanced weather details (humidity, feels-like, sunrise/sunset) - on branch `feature/enhanced-weather-details`
+- None
+
+## Completed
+- [x] Enhanced weather details (humidity, feels-like, sunrise/sunset) - merged to main
   - Added humidity percentage
   - Added feels-like temperature (apparent temperature)
   - Added sunrise/sunset times with timezone support
-
-## UI/UX Improvements
-- [ ] Add manual refresh button to UI
-- [ ] Add last updated timestamp display
-- [ ] Add loading spinner for better visual feedback
+- [x] Manual refresh button to UI
+- [x] Last updated timestamp display
+- [x] Loading spinner for better visual feedback
 
 ## Additional Weather Features
 - [ ] Add wind direction with compass (N, NE, E, etc.)
