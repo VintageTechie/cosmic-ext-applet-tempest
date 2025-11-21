@@ -19,10 +19,20 @@ pub struct DailyForecast {
     pub weathercode: i32,
 }
 
+/// Hourly forecast data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HourlyForecast {
+    pub time: String,
+    pub temperature: f32,
+    pub weathercode: i32,
+    pub precipitation_probability: i32,
+}
+
 /// Complete weather data
 #[derive(Debug, Clone)]
 pub struct WeatherData {
     pub current: CurrentWeather,
+    pub hourly: Vec<HourlyForecast>,
     pub forecast: Vec<DailyForecast>,
     pub last_updated: chrono::DateTime<chrono::Utc>,
 }
@@ -31,6 +41,7 @@ pub struct WeatherData {
 #[derive(Debug, Deserialize)]
 struct OpenMeteoResponse {
     current: CurrentData,
+    hourly: HourlyData,
     daily: DailyData,
 }
 
@@ -39,6 +50,14 @@ struct CurrentData {
     temperature_2m: f32,
     weathercode: i32,
     windspeed_10m: f32,
+}
+
+#[derive(Debug, Deserialize)]
+struct HourlyData {
+    time: Vec<String>,
+    temperature_2m: Vec<f32>,
+    weathercode: Vec<i32>,
+    precipitation_probability: Vec<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,13 +71,25 @@ struct DailyData {
 /// Fetches weather data from Open-Meteo API
 pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str) -> Result<WeatherData, Box<dyn std::error::Error>> {
     let url = format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m&daily=temperature_2m_max,temperature_2m_min,weathercode&temperature_unit={}&windspeed_unit=mph&forecast_days=7",
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode&temperature_unit={}&windspeed_unit=mph&forecast_days=7&forecast_hours=24",
         latitude, longitude, temperature_unit
     );
 
     let response = reqwest::get(&url).await?;
     let data: OpenMeteoResponse = response.json().await?;
 
+    // Process hourly forecast (limit to 12 hours)
+    let mut hourly = Vec::new();
+    for i in 0..data.hourly.time.len().min(12) {
+        hourly.push(HourlyForecast {
+            time: data.hourly.time[i].clone(),
+            temperature: data.hourly.temperature_2m[i],
+            weathercode: data.hourly.weathercode[i],
+            precipitation_probability: data.hourly.precipitation_probability[i],
+        });
+    }
+
+    // Process daily forecast
     let mut forecast = Vec::new();
     for i in 0..data.daily.time.len() {
         forecast.push(DailyForecast {
@@ -75,6 +106,7 @@ pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str
             weathercode: data.current.weathercode,
             windspeed: data.current.windspeed_10m,
         },
+        hourly,
         forecast,
         last_updated: chrono::Utc::now(),
     })
@@ -197,6 +229,32 @@ pub fn weathercode_to_description(code: i32) -> &'static str {
         95 => "Thunderstorm",
         96 | 99 => "Thunderstorm with hail",
         _ => "Unknown",
+    }
+}
+
+/// Formats ISO timestamp to hour (e.g., "2025-01-20T14:00" -> "2:00 PM")
+pub fn format_hour(time_str: &str) -> String {
+    if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(time_str) {
+        datetime.format("%I:%M %p").to_string().trim_start_matches('0').to_string()
+    } else {
+        // Fallback: try to extract hour from string like "2025-01-20T14:00"
+        if let Some(time_part) = time_str.split('T').nth(1) {
+            if let Some(hour_str) = time_part.split(':').next() {
+                if let Ok(hour) = hour_str.parse::<u32>() {
+                    let (display_hour, period) = if hour == 0 {
+                        (12, "AM")
+                    } else if hour < 12 {
+                        (hour, "AM")
+                    } else if hour == 12 {
+                        (12, "PM")
+                    } else {
+                        (hour - 12, "PM")
+                    };
+                    return format!("{}:00 {}", display_hour, period);
+                }
+            }
+        }
+        time_str.to_string()
     }
 }
 
