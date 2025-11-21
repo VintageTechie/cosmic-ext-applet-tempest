@@ -1,10 +1,22 @@
 # TODO List for Cosmic Weather Applet (Tempest)
 
-## Current Work In Progress
-- None
+## v1.0.0 Release - In Progress
 
-## Completed
-- [x] Enhanced weather details (humidity, feels-like, sunrise/sunset) - merged to main
+### Critical for Release
+- [ ] Take screenshot of applet popup and save to `screenshots/tempest-main.png`
+- [ ] Commit all release files to repository
+- [ ] Create git tag v1.0.0 and push to GitHub
+- [ ] Create GitHub release with release notes
+- [ ] Generate cargo-sources.json for Flatpak (or submit without and ask reviewers)
+- [ ] Submit to Flathub (see FLATHUB_SUBMISSION.md)
+
+### Post-Flathub Approval
+- [ ] Apply for System76 COSMIC Apps featured listing
+- [ ] Monitor Flathub PR for reviewer feedback
+- [ ] Enable 2FA on GitHub account (required within 1 week of approval)
+
+## Completed for v1.0.0
+- [x] Enhanced weather details (humidity, feels-like, sunrise/sunset)
   - Added humidity percentage
   - Added feels-like temperature (apparent temperature)
   - Added sunrise/sunset times with timezone support
@@ -17,15 +29,18 @@
 - [x] Visibility information
 - [x] Pressure information
 - [x] Cloud cover percentage
+- [x] Add version display in UI
+- [x] Add tip me link to Ko-fi in about/settings
+- [x] Update version to 1.0.0 in Cargo.toml
+- [x] Update metainfo.xml for production release
+- [x] Create Flatpak manifest (com.vintagetechie.CosmicExtAppletTempest.json)
+- [x] Create CHANGELOG.md
+- [x] Create FLATHUB_SUBMISSION.md guide
+- [x] Create RELEASE_CHECKLIST.md
+- [x] Research COSMIC Applet Store submission process
+- [x] Create screenshots directory with instructions
 
-## Distribution & Packaging
-- [ ] Add version display in UI
-- [ ] Add tip me link to Ko-fi in about/settings
-- [ ] Create Flatpak manifest and packaging
-- [ ] Research COSMIC Applet Store submission process
-- [ ] Submit applet to COSMIC Applet Store
-
-## Optional Enhancements (Future)
+## Optional Enhancements (Future Releases)
 - [ ] Multiple saved locations
 - [ ] Weather comparison between locations
 - [ ] Historical data (yesterday's weather)
@@ -41,3 +56,10 @@
 - Using Open-Meteo API (https://api.open-meteo.com)
 - Freedesktop icon naming specification for weather icons
 - All times should use `timezone=auto` in API calls for local time
+- Distribution via Flathub → COSMIC Store
+- vendor.tar created for offline builds (1GB+, consider .gitignore)
+
+## Quick Reference Files
+- See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for detailed release steps
+- See [FLATHUB_SUBMISSION.md](FLATHUB_SUBMISSION.md) for Flathub submission guide
+- See [CHANGELOG.md](CHANGELOG.md) for version history
