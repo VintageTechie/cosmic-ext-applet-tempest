@@ -11,7 +11,7 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, detect_location, search_city, LocationResult};
+use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, format_hour, detect_location, search_city, LocationResult};
 
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
@@ -39,6 +39,10 @@ pub struct Tempest {
     is_loading: bool,
     /// Error state
     error_message: Option<String>,
+    /// Collapsible section states
+    hourly_expanded: bool,
+    forecast_expanded: bool,
+    settings_expanded: bool,
 }
 
 impl Default for Tempest {
@@ -55,6 +59,9 @@ impl Default for Tempest {
             current_weathercode: 0,
             is_loading: true,
             error_message: None,
+            hourly_expanded: true,
+            forecast_expanded: true,
+            settings_expanded: true,
             config,
             config_handler: None,
         }
@@ -80,6 +87,9 @@ pub enum Message {
     DetectLocation,
     LocationDetected(Result<(f64, f64, String), String>),
     ToggleAutoLocation,
+    ToggleHourly,
+    ToggleForecast,
+    ToggleSettings,
 }
 
 /// Implement the `Application` trait for your application.
@@ -288,85 +298,122 @@ impl Application for Tempest {
 
             column = column.push(widget::divider::horizontal::default());
 
-            // 7-day forecast
-            column = column.push(text("7-Day Forecast").size(16));
+            // Hourly forecast with collapsible header
+            let hourly_arrow = if self.hourly_expanded { "▼" } else { "▶" };
+            column = column.push(
+                widget::button::text(format!("{} Next 12 Hours", hourly_arrow))
+                    .on_press(Message::ToggleHourly)
+                    .width(cosmic::iced::Length::Fill)
+            );
 
-            for day in &weather.forecast {
-                column = column.push(
-                    widget::row()
-                        .spacing(10)
-                        .push(text(&day.date).width(100))
-                        .push(text(format!("{:.0}°", day.temp_max)).width(40))
-                        .push(text(format!("{:.0}°", day.temp_min)).width(40))
-                        .push(text(weathercode_to_description(day.weathercode)))
-                );
+            if self.hourly_expanded {
+                for hour in &weather.hourly {
+                    column = column.push(
+                        widget::row()
+                            .spacing(10)
+                            .push(text(format_hour(&hour.time)).width(80))
+                            .push(widget::icon::from_name(weathercode_to_icon_name(hour.weathercode, false)).size(16).symbolic(true))
+                            .push(text(format!("{:.0}{}", hour.temperature, self.config.temperature_unit.symbol())).width(50))
+                            .push(text(format!("💧 {}%", hour.precipitation_probability)).width(60))
+                    );
+                }
             }
 
             column = column.push(widget::divider::horizontal::default());
 
-            // Settings section
-            column = column.push(text("Settings").size(16));
-
+            // 7-day forecast with collapsible header
+            let forecast_arrow = if self.forecast_expanded { "▼" } else { "▶" };
             column = column.push(
-                settings::item(
-                    "Temperature Unit",
-                    widget::button::standard(self.config.temperature_unit.to_string())
-                        .on_press(Message::ToggleTemperatureUnit)
-                )
+                widget::button::text(format!("{} 7-Day Forecast", forecast_arrow))
+                    .on_press(Message::ToggleForecast)
+                    .width(cosmic::iced::Length::Fill)
             );
 
-            column = column.push(
-                settings::item(
-                    "Auto-detect Location",
-                    widget::row()
-                        .spacing(10)
-                        .push(widget::toggler(self.config.use_auto_location)
-                            .on_toggle(|_| Message::ToggleAutoLocation))
-                        .push(widget::button::standard("Detect Now")
-                            .on_press(Message::DetectLocation))
-                )
-            );
-
-            column = column.push(
-                settings::item(
-                    "Current Location",
-                    text(&self.config.location_name)
-                )
-            );
-
-            if !self.config.use_auto_location {
-                column = column.push(text("Search Location").size(14));
-                column = column.push(
-                    widget::row()
-                        .spacing(10)
-                        .padding([0, 20])
-                        .push(widget::text_input("Enter city name...", &self.city_input)
-                            .on_input(Message::UpdateCityInput)
-                            .on_submit(|_| Message::SearchCity)
-                            .width(cosmic::iced::Length::Fill))
-                        .push(widget::button::standard("Search")
-                            .on_press(Message::SearchCity))
-                );
-
-                if !self.search_results.is_empty() {
-                    for (idx, result) in self.search_results.iter().enumerate() {
-                        column = column.push(
-                            widget::button::text(&result.display_name)
-                                .on_press(Message::SelectLocation(idx))
-                                .padding(8)
-                                .width(cosmic::iced::Length::Fill)
-                        );
-                    }
+            if self.forecast_expanded {
+                for day in &weather.forecast {
+                    column = column.push(
+                        widget::row()
+                            .spacing(10)
+                            .push(text(&day.date).width(100))
+                            .push(text(format!("{:.0}°", day.temp_max)).width(40))
+                            .push(text(format!("{:.0}°", day.temp_min)).width(40))
+                            .push(text(weathercode_to_description(day.weathercode)))
+                    );
                 }
             }
 
+            column = column.push(widget::divider::horizontal::default());
+
+            // Settings section with collapsible header
+            let settings_arrow = if self.settings_expanded { "▼" } else { "▶" };
             column = column.push(
-                settings::item(
-                    "Refresh Interval (minutes)",
-                    widget::text_input("Minutes", &self.refresh_input)
-                        .on_input(Message::UpdateRefreshInterval)
-                )
+                widget::button::text(format!("{} Settings", settings_arrow))
+                    .on_press(Message::ToggleSettings)
+                    .width(cosmic::iced::Length::Fill)
             );
+
+            if self.settings_expanded {
+                column = column.push(
+                    settings::item(
+                        "Temperature Unit",
+                        widget::button::standard(self.config.temperature_unit.to_string())
+                            .on_press(Message::ToggleTemperatureUnit)
+                    )
+                );
+
+                column = column.push(
+                    settings::item(
+                        "Auto-detect Location",
+                        widget::row()
+                            .spacing(10)
+                            .push(widget::toggler(self.config.use_auto_location)
+                                .on_toggle(|_| Message::ToggleAutoLocation))
+                            .push(widget::button::standard("Detect Now")
+                                .on_press(Message::DetectLocation))
+                    )
+                );
+
+                column = column.push(
+                    settings::item(
+                        "Current Location",
+                        text(&self.config.location_name)
+                    )
+                );
+
+                if !self.config.use_auto_location {
+                    column = column.push(text("Search Location").size(14));
+                    column = column.push(
+                        widget::row()
+                            .spacing(10)
+                            .padding([0, 20])
+                            .push(widget::text_input("Enter city name...", &self.city_input)
+                                .on_input(Message::UpdateCityInput)
+                                .on_submit(|_| Message::SearchCity)
+                                .width(cosmic::iced::Length::Fill))
+                            .push(widget::button::standard("Search")
+                                .on_press(Message::SearchCity))
+                    );
+
+                    if !self.search_results.is_empty() {
+                        for (idx, result) in self.search_results.iter().enumerate() {
+                            column = column.push(
+                                widget::button::text(&result.display_name)
+                                    .on_press(Message::SelectLocation(idx))
+                                    .padding(8)
+                                    .width(cosmic::iced::Length::Fill)
+                            );
+                        }
+                    }
+                }
+
+                column = column.push(
+                    settings::item(
+                        "Refresh Interval (minutes)",
+                        widget::text_input("Minutes", &self.refresh_input)
+                            .on_input(Message::UpdateRefreshInterval)
+                    )
+                );
+            }
         }
 
         let scrollable = widget::scrollable(column)
@@ -546,6 +593,15 @@ impl Application for Tempest {
                         eprintln!("Failed to detect location: {}", e);
                     }
                 }
+            }
+            Message::ToggleHourly => {
+                self.hourly_expanded = !self.hourly_expanded;
+            }
+            Message::ToggleForecast => {
+                self.forecast_expanded = !self.forecast_expanded;
+            }
+            Message::ToggleSettings => {
+                self.settings_expanded = !self.settings_expanded;
             }
         }
         Task::none()
