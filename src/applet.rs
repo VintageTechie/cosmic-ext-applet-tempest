@@ -13,6 +13,8 @@ use std::time::Duration;
 use crate::config::{Config, TemperatureUnit};
 use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, format_hour, format_time, wind_direction_to_compass, detect_location, search_city, LocationResult};
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
 pub struct Tempest {
@@ -90,6 +92,7 @@ pub enum Message {
     ToggleHourly,
     ToggleForecast,
     ToggleSettings,
+    OpenUrl(String),
 }
 
 /// Implement the `Application` trait for your application.
@@ -252,7 +255,7 @@ impl Application for Tempest {
     }
 
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
-        let mut column = widget::column().spacing(10).padding(10).max_width(450);
+        let mut column = widget::column().spacing(10).padding(10).max_width(500);
 
         // Add header with location name and refresh button
         let header = widget::row()
@@ -476,6 +479,24 @@ impl Application for Tempest {
                             .on_input(Message::UpdateRefreshInterval)
                     )
                 );
+
+                column = column.push(widget::divider::horizontal::default());
+
+                // Version and support info
+                column = column.push(
+                    settings::item(
+                        "Version",
+                        text(VERSION)
+                    )
+                );
+
+                column = column.push(
+                    settings::item(
+                        "Support Development",
+                        widget::button::text("Tip me on Ko-fi")
+                            .on_press(Message::OpenUrl("https://ko-fi.com/vintagetechie".to_string()))
+                    )
+                );
             }
         }
 
@@ -669,6 +690,11 @@ impl Application for Tempest {
             }
             Message::ToggleSettings => {
                 self.settings_expanded = !self.settings_expanded;
+            }
+            Message::OpenUrl(url) => {
+                if let Err(e) = open::that(&url) {
+                    eprintln!("Failed to open URL {}: {}", url, e);
+                }
             }
         }
         Task::none()
