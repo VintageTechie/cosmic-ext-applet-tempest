@@ -54,6 +54,7 @@ pub struct Config {
     pub temperature_unit: TemperatureUnit,
     pub refresh_interval_minutes: u64,
     pub use_auto_location: bool,
+    pub last_updated: Option<i64>,
 }
 
 impl Default for Config {
@@ -65,6 +66,7 @@ impl Default for Config {
             temperature_unit: TemperatureUnit::default(),
             refresh_interval_minutes: 15,
             use_auto_location: false,
+            last_updated: None,
         }
     }
 }
