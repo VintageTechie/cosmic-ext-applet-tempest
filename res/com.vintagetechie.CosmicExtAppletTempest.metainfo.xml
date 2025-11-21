@@ -1,31 +1,74 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application">
+<component type="addon">
   <id>com.vintagetechie.CosmicExtAppletTempest</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-only</project_license>
-  <project_group>COSMIC</project_group>
-  <developer_name>VintageTechie (John Crenshaw)</developer_name>
-  <update_contact>john@vintagetechie.com</update_contact>
-  <url type="homepage">https://github.com/VintageTechie/cosmic-ext-applet-tempest</url>
-  <url type="bugtracker"></url>
   <name>Tempest</name>
   <summary>Weather applet for COSMIC Desktop with automatic location detection</summary>
   <description>
-    <p>Weather applet for COSMIC Desktop with automatic location detection</p>
+    <p>
+      Tempest is a weather applet for the COSMIC Desktop environment that provides
+      real-time weather information with automatic location detection. It displays
+      current conditions, temperature, and forecasts directly in your panel.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Real-time weather data from Open-Meteo API (no API key required)</li>
+      <li>Automatic location detection via IP geolocation</li>
+      <li>Current temperature displayed in panel</li>
+      <li>Detailed popup with comprehensive weather information</li>
+      <li>Manual refresh button and last updated timestamp</li>
+      <li>Current conditions including temperature, feels-like, and humidity</li>
+      <li>Wind information with speed, direction compass, and gusts</li>
+      <li>UV index, cloud cover, visibility, and atmospheric pressure</li>
+      <li>Sunrise and sunset times with timezone support</li>
+      <li>Collapsible hourly forecast for next 12 hours</li>
+      <li>Collapsible 7-day forecast with high/low temperatures</li>
+      <li>Configurable temperature units (Fahrenheit/Celsius)</li>
+      <li>Custom location support (latitude/longitude)</li>
+      <li>Adjustable refresh interval</li>
+      <li>Persistent configuration</li>
+    </ul>
   </description>
+  <url type="homepage">https://github.com/VintageTechie/cosmic-ext-applet-tempest</url>
+  <url type="bugtracker">https://github.com/VintageTechie/cosmic-ext-applet-tempest/issues</url>
+  <url type="donation">https://ko-fi.com/vintagetechie</url>
+  <developer_name>VintageTechie (John Crenshaw)</developer_name>
+  <update_contact>john@vintagetechie.com</update_contact>
   <launchable type="desktop-id">com.vintagetechie.CosmicExtAppletTempest.desktop</launchable>
-  <icon type="remote">https://github.com/VintageTechie/cosmic-ext-applet-tempest/raw/master/res/icons/hicolor/scalable/apps/com.vintagetechie.CosmicExtAppletTempest.svg</icon>
-  <screenshots>
-  </screenshots>
+
   <categories>
+    <category>Utility</category>
+    <category>COSMIC</category>
   </categories>
-  <provides>
-    <id>com.vintagetechie.CosmicExtAppletTempest</id>
-    <mimetypes>
-      <mimetype>text/plain</mimetype>
-    </mimetypes>
-    <binaries>
-      <binary>cosmic-ext-applet-tempest</binary>
-    </binaries>
-  </provides>
+
+  <releases>
+    <release version="1.0.0" date="2025-01-21">
+      <description>
+        <p>Initial production release</p>
+        <ul>
+          <li>Real-time weather data with automatic location detection</li>
+          <li>Current conditions with temperature, humidity, and feels-like</li>
+          <li>Comprehensive weather details (wind, UV, pressure, visibility, clouds)</li>
+          <li>Sunrise and sunset times with timezone support</li>
+          <li>Hourly forecast for next 12 hours</li>
+          <li>7-day weather forecast</li>
+          <li>Manual refresh button and last updated timestamp</li>
+          <li>Configurable units and location settings</li>
+          <li>Version display and Ko-fi support link</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Tempest weather applet showing current conditions and forecasts</caption>
+      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-main.png</image>
+    </screenshot>
+  </screenshots>
+
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-info">mild</content_attribute>
+  </content_rating>
 </component>
