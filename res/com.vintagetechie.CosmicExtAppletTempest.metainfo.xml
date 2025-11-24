@@ -44,6 +44,15 @@
   </categories>
 
   <releases>
+    <release version="1.0.1" date="2025-01-24">
+      <description>
+        <p>Metadata fix for COSMIC Store visibility</p>
+        <ul>
+          <li>Changed component type to desktop-application for proper Store categorization</li>
+          <li>Added com.system76.CosmicApplet provides declaration</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0" date="2025-01-21">
       <description>
         <p>Initial production release</p>
