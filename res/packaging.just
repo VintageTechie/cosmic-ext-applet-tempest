@@ -36,6 +36,13 @@ install:
     install -Dm0644 {{metainfo-src}} {{metainfo-dst}}
     install -Dm0644 {{icons-src}} {{icons-dst}}
 
+# Builds and installs with sudo (for easy development)
+install-dev: build-release
+    sudo install -Dm0755 {{bin-src}} {{bin-dst}}
+    sudo install -Dm0644 {{desktop-src}} {{desktop-dst}}
+    sudo install -Dm0644 {{metainfo-src}} {{metainfo-dst}}
+    sudo install -Dm0644 {{icons-src}} {{icons-dst}}
+
 
 # Uninstalls globally installed files
 uninstall:
