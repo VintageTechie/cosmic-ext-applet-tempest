@@ -22,6 +22,8 @@
       <li>Current conditions including temperature, feels-like, and humidity</li>
       <li>Wind information with speed, direction compass, and gusts</li>
       <li>UV index, cloud cover, visibility, and atmospheric pressure</li>
+      <li>Air quality data with PM2.5, PM10, ozone, NO2, and CO readings</li>
+      <li>Auto-detects US or European AQI standard based on location</li>
       <li>Sunrise and sunset times with timezone support</li>
       <li>Collapsible hourly forecast for next 12 hours</li>
       <li>Collapsible 7-day forecast with high/low temperatures</li>
@@ -44,6 +46,22 @@
   </categories>
 
   <releases>
+    <release version="1.1.0" date="2025-11-25">
+      <description>
+        <p>Air quality and UI improvements</p>
+        <ul>
+          <li>Added air quality data from Open-Meteo API</li>
+          <li>AQI displayed in panel alongside temperature</li>
+          <li>Collapsible air quality section with PM2.5, PM10, ozone, NO2, CO</li>
+          <li>Auto-detects European locations and uses EU AQI scale</li>
+          <li>Weather and air quality fetched in parallel</li>
+          <li>Improved date formatting in 7-day forecast</li>
+          <li>Added weather icons to forecast rows</li>
+          <li>Replaced Unicode arrows with proper icons in collapsible headers</li>
+          <li>Removed emoji characters for cleaner appearance</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.1" date="2025-01-24">
       <description>
         <p>Metadata fix for COSMIC Store visibility</p>

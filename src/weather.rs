@@ -388,6 +388,15 @@ pub fn format_time(time_str: &str) -> String {
     }
 }
 
+/// Formats date string to readable format (e.g., "2025-11-25" -> "Tue Nov 25")
+pub fn format_date(date_str: &str) -> String {
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+        date.format("%a %b %d").to_string()
+    } else {
+        date_str.to_string()
+    }
+}
+
 /// Converts wind direction in degrees to compass direction
 pub fn wind_direction_to_compass(degrees: i32) -> &'static str {
     match degrees {
