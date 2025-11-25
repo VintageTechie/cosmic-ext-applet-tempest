@@ -11,7 +11,14 @@ use cosmic::{Application, Element, Action};
 use std::time::Duration;
 
 use crate::config::{Config, TemperatureUnit};
-use crate::weather::{WeatherData, fetch_weather, weathercode_to_description, weathercode_to_icon_name, format_hour, format_time, wind_direction_to_compass, detect_location, search_city, LocationResult};
+use crate::weather::{
+    WeatherData, AirQualityData, AqiStandard,
+    fetch_weather, fetch_air_quality,
+    weathercode_to_description, weathercode_to_icon_name,
+    format_hour, format_time, wind_direction_to_compass,
+    detect_location, search_city, LocationResult,
+    aqi_to_description, aqi_standard_label,
+};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -24,6 +31,8 @@ pub struct Tempest {
     popup: Option<Id>,
     /// Weather data.
     weather_data: Option<WeatherData>,
+    /// Air quality data.
+    air_quality: Option<AirQualityData>,
     /// Configuration
     config: Config,
     /// Config handler for persistence
@@ -37,6 +46,8 @@ pub struct Tempest {
     display_label: String,
     /// Current weather code for icon display
     current_weathercode: i32,
+    /// Current AQI for panel display
+    current_aqi: Option<(i32, AqiStandard)>,
     /// Loading state
     is_loading: bool,
     /// Error state
@@ -45,6 +56,7 @@ pub struct Tempest {
     hourly_expanded: bool,
     forecast_expanded: bool,
     settings_expanded: bool,
+    air_quality_expanded: bool,
 }
 
 impl Default for Tempest {
@@ -54,16 +66,19 @@ impl Default for Tempest {
             core: Default::default(),
             popup: None,
             weather_data: None,
+            air_quality: None,
             city_input: String::new(),
             refresh_input: config.refresh_interval_minutes.to_string(),
             search_results: Vec::new(),
             display_label: "...".to_string(),
             current_weathercode: 0,
+            current_aqi: None,
             is_loading: true,
             error_message: None,
             hourly_expanded: true,
             forecast_expanded: true,
             settings_expanded: true,
+            air_quality_expanded: true,
             config,
             config_handler: None,
         }
@@ -79,6 +94,7 @@ pub enum Message {
     PopupClosed(Id),
     RefreshWeather,
     WeatherUpdated(Result<WeatherData, String>),
+    AirQualityUpdated(Result<AirQualityData, String>),
     Tick,
     ToggleTemperatureUnit,
     UpdateCityInput(String),
@@ -92,6 +108,7 @@ pub enum Message {
     ToggleHourly,
     ToggleForecast,
     ToggleSettings,
+    ToggleAirQuality,
     OpenUrl(String),
 }
 
@@ -213,45 +230,33 @@ impl Application for Tempest {
         let temperature_text = text(&self.display_label);
 
         let data = if self.core.applet.is_horizontal() {
-            Element::from(
-                widget::row()
-                    .push(icon)
-                    .push(temperature_text)
-                    .align_y(Alignment::Center)
-                    .spacing(4),
-            )
+            let mut row = widget::row()
+                .push(icon)
+                .push(temperature_text)
+                .align_y(Alignment::Center)
+                .spacing(4);
+            if let Some((aqi, _)) = self.current_aqi {
+                row = row.push(text("|").size(12));
+                row = row.push(text(format!("AQI {}", aqi)));
+            }
+            Element::from(row)
         } else {
-            Element::from(
-                widget::column()
-                    .push(icon)
-                    .push(temperature_text)
-                    .align_x(Alignment::Center)
-                    .spacing(4),
-            )
+            let mut col = widget::column()
+                .push(icon)
+                .push(temperature_text)
+                .align_x(Alignment::Center)
+                .spacing(4);
+            if let Some((aqi, _)) = self.current_aqi {
+                col = col.push(text(format!("AQI {}", aqi)).size(12));
+            }
+            Element::from(col)
         };
 
         let button = widget::button::custom(data)
             .class(cosmic::theme::Button::AppletIcon)
             .on_press(Message::TogglePopup);
 
-        let tooltip_text = if let Some(ref error) = self.error_message {
-            format!("Error: {}", error)
-        } else if self.weather_data.is_some() {
-            format!("{} - {}",
-                weathercode_to_description(self.current_weathercode),
-                self.config.location_name
-            )
-        } else {
-            "Loading...".to_string()
-        };
-
-        let button_with_tooltip = widget::tooltip(
-            button,
-            text(tooltip_text),
-            widget::tooltip::Position::Bottom
-        );
-
-        widget::autosize::autosize(button_with_tooltip, widget::Id::unique()).into()
+        widget::autosize::autosize(button, widget::Id::unique()).into()
     }
 
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
@@ -360,6 +365,50 @@ impl Application for Tempest {
                         .push(text(format!("☀️ Sunrise: {}", format_time(&first_day.sunrise))).size(14))
                         .push(text(format!("🌙 Sunset: {}", format_time(&first_day.sunset))).size(14))
                 );
+            }
+
+            column = column.push(widget::divider::horizontal::default());
+
+            // Air Quality section with collapsible header
+            let air_quality_arrow = if self.air_quality_expanded { "▼" } else { "▶" };
+            column = column.push(
+                widget::button::text(format!("{} Air Quality", air_quality_arrow))
+                    .on_press(Message::ToggleAirQuality)
+                    .width(cosmic::iced::Length::Fill)
+            );
+
+            if self.air_quality_expanded {
+                if let Some(ref aq) = self.air_quality {
+                    let label = aqi_standard_label(aq.standard);
+                    let description = aqi_to_description(aq.aqi, aq.standard);
+
+                    column = column.push(
+                        widget::row()
+                            .spacing(20)
+                            .push(text(format!("{}: {}", label, aq.aqi)).size(16))
+                            .push(text(description).size(14))
+                    );
+
+                    column = column.push(
+                        widget::row()
+                            .spacing(20)
+                            .push(text(format!("PM2.5: {:.1} µg/m³", aq.pm2_5)).size(14))
+                            .push(text(format!("PM10: {:.1} µg/m³", aq.pm10)).size(14))
+                    );
+
+                    column = column.push(
+                        widget::row()
+                            .spacing(20)
+                            .push(text(format!("Ozone: {:.1} µg/m³", aq.ozone)).size(14))
+                            .push(text(format!("NO₂: {:.1} µg/m³", aq.nitrogen_dioxide)).size(14))
+                    );
+
+                    column = column.push(
+                        text(format!("CO: {:.1} µg/m³", aq.carbon_monoxide)).size(14)
+                    );
+                } else {
+                    column = column.push(text("Air quality data unavailable").size(14));
+                }
             }
 
             column = column.push(widget::divider::horizontal::default());
@@ -544,13 +593,25 @@ impl Application for Tempest {
                 let lat = self.config.latitude;
                 let lon = self.config.longitude;
                 let temp_unit = self.config.temperature_unit.api_param().to_string();
-                return Task::perform(
+
+                // Fetch weather and air quality in parallel
+                let weather_task = Task::perform(
                     async move {
                         fetch_weather(lat, lon, &temp_unit).await
                             .map_err(|e| e.to_string())
                     },
                     |result| Action::App(Message::WeatherUpdated(result)),
                 );
+
+                let air_quality_task = Task::perform(
+                    async move {
+                        fetch_air_quality(lat, lon).await
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| Action::App(Message::AirQualityUpdated(result)),
+                );
+
+                return Task::batch([weather_task, air_quality_task]);
             }
             Message::WeatherUpdated(result) => {
                 self.is_loading = false;
@@ -572,6 +633,19 @@ impl Application for Tempest {
                         self.display_label = "ERR".to_string();
                         self.current_weathercode = 0;
                         self.error_message = Some(e);
+                    }
+                }
+            }
+            Message::AirQualityUpdated(result) => {
+                match result {
+                    Ok(data) => {
+                        self.current_aqi = Some((data.aqi, data.standard));
+                        self.air_quality = Some(data);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to fetch air quality: {}", e);
+                        self.current_aqi = None;
+                        self.air_quality = None;
                     }
                 }
             }
@@ -690,6 +764,9 @@ impl Application for Tempest {
             }
             Message::ToggleSettings => {
                 self.settings_expanded = !self.settings_expanded;
+            }
+            Message::ToggleAirQuality => {
+                self.air_quality_expanded = !self.air_quality_expanded;
             }
             Message::OpenUrl(url) => {
                 if let Err(e) = open::that(&url) {

@@ -47,6 +47,25 @@ pub struct WeatherData {
     pub last_updated: chrono::DateTime<chrono::Utc>,
 }
 
+/// AQI standard based on region
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AqiStandard {
+    Us,
+    European,
+}
+
+/// Current air quality data
+#[derive(Debug, Clone)]
+pub struct AirQualityData {
+    pub aqi: i32,
+    pub standard: AqiStandard,
+    pub pm2_5: f32,
+    pub pm10: f32,
+    pub ozone: f32,
+    pub nitrogen_dioxide: f32,
+    pub carbon_monoxide: f32,
+}
+
 /// Open-Meteo API response structure
 #[derive(Debug, Deserialize)]
 struct OpenMeteoResponse {
@@ -140,6 +159,60 @@ pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str
         forecast,
         last_updated: chrono::Utc::now(),
     })
+}
+
+/// Checks if coordinates fall within Europe
+fn is_european_location(latitude: f64, longitude: f64) -> bool {
+    // Rough bounding box: lat 35-71, lon -25 to 40
+    (35.0..=71.0).contains(&latitude) && (-25.0..=40.0).contains(&longitude)
+}
+
+/// Fetches air quality data from Open-Meteo Air Quality API
+pub async fn fetch_air_quality(
+    latitude: f64,
+    longitude: f64,
+) -> Result<AirQualityData, Box<dyn std::error::Error + Send + Sync>> {
+    let url = format!(
+        "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={}&longitude={}&current=us_aqi,european_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,carbon_monoxide&timezone=auto",
+        latitude, longitude
+    );
+
+    let response = reqwest::get(&url).await?;
+    let data: AirQualityResponse = response.json().await?;
+
+    let use_european = is_european_location(latitude, longitude);
+    let (aqi, standard) = if use_european {
+        (data.current.european_aqi.unwrap_or(0), AqiStandard::European)
+    } else {
+        (data.current.us_aqi.unwrap_or(0), AqiStandard::Us)
+    };
+
+    Ok(AirQualityData {
+        aqi,
+        standard,
+        pm2_5: data.current.pm2_5.unwrap_or(0.0),
+        pm10: data.current.pm10.unwrap_or(0.0),
+        ozone: data.current.ozone.unwrap_or(0.0),
+        nitrogen_dioxide: data.current.nitrogen_dioxide.unwrap_or(0.0),
+        carbon_monoxide: data.current.carbon_monoxide.unwrap_or(0.0),
+    })
+}
+
+/// Open-Meteo Air Quality API response
+#[derive(Debug, Deserialize)]
+struct AirQualityResponse {
+    current: AirQualityCurrentData,
+}
+
+#[derive(Debug, Deserialize)]
+struct AirQualityCurrentData {
+    us_aqi: Option<i32>,
+    european_aqi: Option<i32>,
+    pm2_5: Option<f32>,
+    pm10: Option<f32>,
+    ozone: Option<f32>,
+    nitrogen_dioxide: Option<f32>,
+    carbon_monoxide: Option<f32>,
 }
 
 /// IP-API.com response structure for geolocation
@@ -362,5 +435,45 @@ pub fn weathercode_to_icon_name(code: i32, is_night: bool) -> &'static str {
         96 | 99 => "weather-storm",
         // Unknown
         _ => "weather-severe-alert",
+    }
+}
+
+/// Converts US AQI value to description
+pub fn us_aqi_to_description(aqi: i32) -> &'static str {
+    match aqi {
+        0..=50 => "Good",
+        51..=100 => "Moderate",
+        101..=150 => "Unhealthy for Sensitive Groups",
+        151..=200 => "Unhealthy",
+        201..=300 => "Very Unhealthy",
+        _ => "Hazardous",
+    }
+}
+
+/// Converts European AQI value to description
+pub fn eu_aqi_to_description(aqi: i32) -> &'static str {
+    match aqi {
+        0..=20 => "Good",
+        21..=40 => "Fair",
+        41..=60 => "Moderate",
+        61..=80 => "Poor",
+        81..=100 => "Very Poor",
+        _ => "Extremely Poor",
+    }
+}
+
+/// Returns AQI description based on standard
+pub fn aqi_to_description(aqi: i32, standard: AqiStandard) -> &'static str {
+    match standard {
+        AqiStandard::Us => us_aqi_to_description(aqi),
+        AqiStandard::European => eu_aqi_to_description(aqi),
+    }
+}
+
+/// Returns label for the AQI standard
+pub fn aqi_standard_label(standard: AqiStandard) -> &'static str {
+    match standard {
+        AqiStandard::Us => "US AQI",
+        AqiStandard::European => "EU AQI",
     }
 }
