@@ -15,7 +15,7 @@ use crate::weather::{
     WeatherData, AirQualityData, AqiStandard,
     fetch_weather, fetch_air_quality,
     weathercode_to_description, weathercode_to_icon_name,
-    format_hour, format_time, wind_direction_to_compass,
+    format_hour, format_time, format_date, wind_direction_to_compass,
     detect_location, search_city, LocationResult,
     aqi_to_description, aqi_standard_label,
 };
@@ -362,17 +362,22 @@ impl Application for Tempest {
                 column = column.push(
                     widget::row()
                         .spacing(20)
-                        .push(text(format!("☀️ Sunrise: {}", format_time(&first_day.sunrise))).size(14))
-                        .push(text(format!("🌙 Sunset: {}", format_time(&first_day.sunset))).size(14))
+                        .push(text(format!("Sunrise: {}", format_time(&first_day.sunrise))).size(14))
+                        .push(text(format!("Sunset: {}", format_time(&first_day.sunset))).size(14))
                 );
             }
 
             column = column.push(widget::divider::horizontal::default());
 
             // Air Quality section with collapsible header
-            let air_quality_arrow = if self.air_quality_expanded { "▼" } else { "▶" };
+            let air_quality_icon = if self.air_quality_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
             column = column.push(
-                widget::button::text(format!("{} Air Quality", air_quality_arrow))
+                widget::button::custom(
+                    widget::row()
+                        .spacing(8)
+                        .push(widget::icon::from_name(air_quality_icon).size(16).symbolic(true))
+                        .push(text("Air Quality"))
+                )
                     .on_press(Message::ToggleAirQuality)
                     .width(cosmic::iced::Length::Fill)
             );
@@ -414,9 +419,14 @@ impl Application for Tempest {
             column = column.push(widget::divider::horizontal::default());
 
             // Hourly forecast with collapsible header
-            let hourly_arrow = if self.hourly_expanded { "▼" } else { "▶" };
+            let hourly_icon = if self.hourly_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
             column = column.push(
-                widget::button::text(format!("{} Next 12 Hours", hourly_arrow))
+                widget::button::custom(
+                    widget::row()
+                        .spacing(8)
+                        .push(widget::icon::from_name(hourly_icon).size(16).symbolic(true))
+                        .push(text("Next 12 Hours"))
+                )
                     .on_press(Message::ToggleHourly)
                     .width(cosmic::iced::Length::Fill)
             );
@@ -426,10 +436,10 @@ impl Application for Tempest {
                     column = column.push(
                         widget::row()
                             .spacing(10)
-                            .push(text(format_hour(&hour.time)).width(80))
+                            .push(text(format_hour(&hour.time)).width(70))
                             .push(widget::icon::from_name(weathercode_to_icon_name(hour.weathercode, false)).size(16).symbolic(true))
-                            .push(text(format!("{:.0}{}", hour.temperature, self.config.temperature_unit.symbol())).width(50))
-                            .push(text(format!("💧 {}%", hour.precipitation_probability)).width(60))
+                            .push(text(format!("{:.0}{}", hour.temperature, self.config.temperature_unit.symbol())).width(45))
+                            .push(text(format!("{}%", hour.precipitation_probability)).width(35))
                     );
                 }
             }
@@ -437,9 +447,14 @@ impl Application for Tempest {
             column = column.push(widget::divider::horizontal::default());
 
             // 7-day forecast with collapsible header
-            let forecast_arrow = if self.forecast_expanded { "▼" } else { "▶" };
+            let forecast_icon = if self.forecast_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
             column = column.push(
-                widget::button::text(format!("{} 7-Day Forecast", forecast_arrow))
+                widget::button::custom(
+                    widget::row()
+                        .spacing(8)
+                        .push(widget::icon::from_name(forecast_icon).size(16).symbolic(true))
+                        .push(text("7-Day Forecast"))
+                )
                     .on_press(Message::ToggleForecast)
                     .width(cosmic::iced::Length::Fill)
             );
@@ -449,9 +464,10 @@ impl Application for Tempest {
                     column = column.push(
                         widget::row()
                             .spacing(10)
-                            .push(text(&day.date).width(100))
-                            .push(text(format!("{:.0}°", day.temp_max)).width(40))
-                            .push(text(format!("{:.0}°", day.temp_min)).width(40))
+                            .push(text(format_date(&day.date)).width(90))
+                            .push(widget::icon::from_name(weathercode_to_icon_name(day.weathercode, false)).size(16).symbolic(true))
+                            .push(text(format!("{:.0}°", day.temp_max)).width(35))
+                            .push(text(format!("{:.0}°", day.temp_min)).width(35))
                             .push(text(weathercode_to_description(day.weathercode)))
                     );
                 }
@@ -460,9 +476,14 @@ impl Application for Tempest {
             column = column.push(widget::divider::horizontal::default());
 
             // Settings section with collapsible header
-            let settings_arrow = if self.settings_expanded { "▼" } else { "▶" };
+            let settings_icon = if self.settings_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
             column = column.push(
-                widget::button::text(format!("{} Settings", settings_arrow))
+                widget::button::custom(
+                    widget::row()
+                        .spacing(8)
+                        .push(widget::icon::from_name(settings_icon).size(16).symbolic(true))
+                        .push(text("Settings"))
+                )
                     .on_press(Message::ToggleSettings)
                     .width(cosmic::iced::Length::Fill)
             );
