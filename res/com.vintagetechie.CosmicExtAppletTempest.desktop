@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Tempest
-Exec=cosmic-ext-applet-tempest %F
+Exec=cosmic-ext-applet-tempest
 Terminal=false
 Type=Application
 StartupNotify=true
