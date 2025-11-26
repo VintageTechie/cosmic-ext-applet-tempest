@@ -11,6 +11,6 @@ fn main() -> cosmic::iced::Result {
 
     // Enable localizations to be applied.
     i18n::init(&requested_languages);
-    
+
     cosmic::applet::run::<applet::Tempest>(())
 }
