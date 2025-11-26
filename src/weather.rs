@@ -108,10 +108,15 @@ struct DailyData {
 }
 
 /// Fetches weather data from Open-Meteo API
-pub async fn fetch_weather(latitude: f64, longitude: f64, temperature_unit: &str) -> Result<WeatherData, Box<dyn std::error::Error>> {
+pub async fn fetch_weather(
+    latitude: f64,
+    longitude: f64,
+    temperature_unit: &str,
+    windspeed_unit: &str,
+) -> Result<WeatherData, Box<dyn std::error::Error>> {
     let url = format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m,apparent_temperature,wind_direction_10m,wind_gusts_10m,uv_index,visibility,surface_pressure,cloud_cover&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&temperature_unit={}&windspeed_unit=mph&timezone=auto&forecast_days=7&forecast_hours=24",
-        latitude, longitude, temperature_unit
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m,apparent_temperature,wind_direction_10m,wind_gusts_10m,uv_index,visibility,surface_pressure,cloud_cover&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&temperature_unit={}&windspeed_unit={}&timezone=auto&forecast_days=7&forecast_hours=24",
+        latitude, longitude, temperature_unit, windspeed_unit
     );
 
     let response = reqwest::get(&url).await?;
@@ -182,7 +187,10 @@ pub async fn fetch_air_quality(
 
     let use_european = is_european_location(latitude, longitude);
     let (aqi, standard) = if use_european {
-        (data.current.european_aqi.unwrap_or(0), AqiStandard::European)
+        (
+            data.current.european_aqi.unwrap_or(0),
+            AqiStandard::European,
+        )
     } else {
         (data.current.us_aqi.unwrap_or(0), AqiStandard::Us)
     };
@@ -267,7 +275,9 @@ impl LocationResult {
 }
 
 /// Searches for a location by city name using Open-Meteo Geocoding API
-pub async fn search_city(city_name: &str) -> Result<Vec<LocationResult>, Box<dyn std::error::Error>> {
+pub async fn search_city(
+    city_name: &str,
+) -> Result<Vec<LocationResult>, Box<dyn std::error::Error>> {
     let url = format!(
         "https://geocoding-api.open-meteo.com/v1/search?name={}&count=10&language=en&format=json",
         urlencoding::encode(city_name)
@@ -307,7 +317,10 @@ pub async fn detect_location() -> Result<(f64, f64, String), Box<dyn std::error:
                 _ => "Unknown".to_string(),
             };
 
-            eprintln!("Auto-detected location: {}, {} ({})", lat, lon, location_name);
+            eprintln!(
+                "Auto-detected location: {}, {} ({})",
+                lat, lon, location_name
+            );
             return Ok((lat, lon, location_name));
         }
     }
@@ -338,7 +351,11 @@ pub fn weathercode_to_description(code: i32) -> &'static str {
 /// Formats ISO timestamp to hour (e.g., "2025-01-20T14:00" -> "2:00 PM")
 pub fn format_hour(time_str: &str) -> String {
     if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(time_str) {
-        datetime.format("%I:%M %p").to_string().trim_start_matches('0').to_string()
+        datetime
+            .format("%I:%M %p")
+            .to_string()
+            .trim_start_matches('0')
+            .to_string()
     } else {
         // Fallback: try to extract hour from string like "2025-01-20T14:00"
         if let Some(time_part) = time_str.split('T').nth(1) {
@@ -364,13 +381,20 @@ pub fn format_hour(time_str: &str) -> String {
 /// Formats ISO timestamp to time (e.g., "2025-01-20T06:30:00" -> "6:30 AM")
 pub fn format_time(time_str: &str) -> String {
     if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(time_str) {
-        datetime.format("%I:%M %p").to_string().trim_start_matches('0').to_string()
+        datetime
+            .format("%I:%M %p")
+            .to_string()
+            .trim_start_matches('0')
+            .to_string()
     } else {
         // Fallback: try to extract time from string like "2025-01-20T06:30:00"
         if let Some(time_part) = time_str.split('T').nth(1) {
             let time_components: Vec<&str> = time_part.split(':').collect();
             if time_components.len() >= 2 {
-                if let (Ok(hour), Ok(minute)) = (time_components[0].parse::<u32>(), time_components[1].parse::<u32>()) {
+                if let (Ok(hour), Ok(minute)) = (
+                    time_components[0].parse::<u32>(),
+                    time_components[1].parse::<u32>(),
+                ) {
                     let (display_hour, period) = if hour == 0 {
                         (12, "AM")
                     } else if hour < 12 {
@@ -417,11 +441,29 @@ pub fn wind_direction_to_compass(degrees: i32) -> &'static str {
 pub fn weathercode_to_icon_name(code: i32, is_night: bool) -> &'static str {
     match code {
         // Clear sky
-        0 => if is_night { "weather-clear-night" } else { "weather-clear" },
+        0 => {
+            if is_night {
+                "weather-clear-night"
+            } else {
+                "weather-clear"
+            }
+        }
         // Mainly clear
-        1 => if is_night { "weather-few-clouds-night" } else { "weather-few-clouds" },
+        1 => {
+            if is_night {
+                "weather-few-clouds-night"
+            } else {
+                "weather-few-clouds"
+            }
+        }
         // Partly cloudy
-        2 => if is_night { "weather-few-clouds-night" } else { "weather-few-clouds" },
+        2 => {
+            if is_night {
+                "weather-few-clouds-night"
+            } else {
+                "weather-few-clouds"
+            }
+        }
         // Overcast
         3 => "weather-overcast",
         // Fog and depositing rime fog

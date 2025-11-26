@@ -1,23 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-use cosmic::app::{Task, Core};
+use cosmic::app::{Core, Task};
 use cosmic::cosmic_config::CosmicConfigEntry;
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::{Limits, Subscription};
 use cosmic::iced_futures::Subscription as IcedSubscription;
-use cosmic::widget::{self, text, settings};
-use cosmic::{Application, Element, Action};
+use cosmic::widget::{self, settings, text};
+use cosmic::{Action, Application, Element};
 use std::time::Duration;
 
-use crate::config::{Config, TemperatureUnit};
+use crate::config::{Config, MeasurementSystem, TemperatureUnit};
 use crate::weather::{
-    WeatherData, AirQualityData, AqiStandard,
-    fetch_weather, fetch_air_quality,
-    weathercode_to_description, weathercode_to_icon_name,
-    format_hour, format_time, format_date, wind_direction_to_compass,
-    detect_location, search_city, LocationResult,
-    aqi_to_description, aqi_standard_label,
+    aqi_standard_label, aqi_to_description, detect_location, fetch_air_quality, fetch_weather,
+    format_date, format_hour, format_time, search_city, weathercode_to_description,
+    weathercode_to_icon_name, wind_direction_to_compass, AirQualityData, AqiStandard,
+    LocationResult, WeatherData,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -167,17 +165,11 @@ impl Application for Tempest {
         // Start with auto-location if enabled, otherwise fetch weather
         let task = if config.use_auto_location {
             Task::perform(
-                async {
-                    detect_location().await
-                        .map_err(|e| e.to_string())
-                },
+                async { detect_location().await.map_err(|e| e.to_string()) },
                 |result| Action::App(Message::LocationDetected(result)),
             )
         } else {
-            Task::perform(
-                async { Message::RefreshWeather },
-                Action::App
-            )
+            Task::perform(async { Message::RefreshWeather }, Action::App)
         };
 
         (app, task)
@@ -195,7 +187,7 @@ impl Application for Tempest {
                     tokio::time::sleep(interval).await;
                     yield Message::Tick;
                 }
-            }
+            },
         )
     }
 
@@ -210,8 +202,8 @@ impl Application for Tempest {
     ///
     /// To get a better sense of which widgets are available, check out the `widget` module.
     fn view(&self) -> Element<'_, Self::Message> {
-        use cosmic::iced::Alignment;
         use chrono::{Local, Timelike};
+        use cosmic::iced::Alignment;
 
         // Determine if it's night time (6pm to 6am)
         let is_night = matches!(Local::now().hour(), 18..24 | 0..6);
@@ -223,9 +215,7 @@ impl Application for Tempest {
             weathercode_to_icon_name(self.current_weathercode, is_night)
         };
 
-        let icon = widget::icon::from_name(icon_name)
-            .size(16)
-            .symbolic(true);
+        let icon = widget::icon::from_name(icon_name).size(16).symbolic(true);
 
         let temperature_text = text(&self.display_label);
 
@@ -270,7 +260,7 @@ impl Application for Tempest {
             .push(
                 widget::button::icon(widget::icon::from_name("view-refresh-symbolic"))
                     .on_press(Message::RefreshWeather)
-                    .padding(8)
+                    .padding(8),
             );
         column = column.push(header);
 
@@ -278,11 +268,12 @@ impl Application for Tempest {
         if let Some(timestamp) = self.config.last_updated {
             if let Some(datetime) = chrono::DateTime::from_timestamp(timestamp, 0) {
                 let local_time: chrono::DateTime<chrono::Local> = datetime.into();
-                let formatted_time = local_time.format("%I:%M %p").to_string().trim_start_matches('0').to_string();
-                column = column.push(
-                    text(format!("Updated: {}", formatted_time))
-                        .size(12)
-                );
+                let formatted_time = local_time
+                    .format("%I:%M %p")
+                    .to_string()
+                    .trim_start_matches('0')
+                    .to_string();
+                column = column.push(text(format!("Updated: {}", formatted_time)).size(12));
             }
         }
 
@@ -297,13 +288,10 @@ impl Application for Tempest {
                         .push(widget::icon::from_name("dialog-error-symbolic").size(48))
                         .push(text("Failed to load weather").size(18))
                         .push(text(error).size(14))
-                        .push(
-                            widget::button::standard("Retry")
-                                .on_press(Message::RefreshWeather)
-                        )
+                        .push(widget::button::standard("Retry").on_press(Message::RefreshWeather)),
                 )
                 .align_x(cosmic::iced::alignment::Horizontal::Center)
-                .width(cosmic::iced::Length::Fill)
+                .width(cosmic::iced::Length::Fill),
             );
         } else if self.is_loading {
             column = column.push(
@@ -312,34 +300,65 @@ impl Application for Tempest {
                         .spacing(10)
                         .align_x(cosmic::iced::alignment::Horizontal::Center)
                         .push(widget::icon::from_name("content-loading-symbolic").size(48))
-                        .push(text("Loading weather data...").size(18))
+                        .push(text("Loading weather data...").size(18)),
                 )
                 .align_x(cosmic::iced::alignment::Horizontal::Center)
-                .width(cosmic::iced::Length::Fill)
+                .width(cosmic::iced::Length::Fill),
             );
         } else if let Some(ref weather) = self.weather_data {
             // Current conditions
             column = column.push(
                 widget::row()
                     .spacing(10)
-                    .push(text(format!("{:.0}{}", weather.current.temperature, self.config.temperature_unit.symbol())).size(32))
-                    .push(text(weathercode_to_description(weather.current.weathercode)))
+                    .push(
+                        text(format!(
+                            "{:.0}{}",
+                            weather.current.temperature,
+                            self.config.temperature_unit.symbol()
+                        ))
+                        .size(32),
+                    )
+                    .push(text(weathercode_to_description(
+                        weather.current.weathercode,
+                    ))),
             );
 
             // Additional current conditions
             column = column.push(
                 widget::row()
                     .spacing(20)
-                    .push(text(format!("Feels like: {:.0}{}", weather.current.feels_like, self.config.temperature_unit.symbol())).size(14))
-                    .push(text(format!("Humidity: {}%", weather.current.humidity)).size(14))
+                    .push(
+                        text(format!(
+                            "Feels like: {:.0}{}",
+                            weather.current.feels_like,
+                            self.config.temperature_unit.symbol()
+                        ))
+                        .size(14),
+                    )
+                    .push(text(format!("Humidity: {}%", weather.current.humidity)).size(14)),
             );
 
             // Wind information
+            let wind_unit = self.config.measurement_system.wind_speed_unit();
             column = column.push(
                 widget::row()
                     .spacing(20)
-                    .push(text(format!("Wind: {:.1} mph {}", weather.current.windspeed, wind_direction_to_compass(weather.current.wind_direction))).size(14))
-                    .push(text(format!("Gusts: {:.1} mph", weather.current.wind_gusts)).size(14))
+                    .push(
+                        text(format!(
+                            "Wind: {:.1} {} {}",
+                            weather.current.windspeed,
+                            wind_unit,
+                            wind_direction_to_compass(weather.current.wind_direction)
+                        ))
+                        .size(14),
+                    )
+                    .push(
+                        text(format!(
+                            "Gusts: {:.1} {}",
+                            weather.current.wind_gusts, wind_unit
+                        ))
+                        .size(14),
+                    ),
             );
 
             // Additional weather details
@@ -347,14 +366,21 @@ impl Application for Tempest {
                 widget::row()
                     .spacing(20)
                     .push(text(format!("UV Index: {:.1}", weather.current.uv_index)).size(14))
-                    .push(text(format!("Cloud Cover: {}%", weather.current.cloud_cover)).size(14))
+                    .push(text(format!("Cloud Cover: {}%", weather.current.cloud_cover)).size(14)),
             );
 
+            let visibility = self
+                .config
+                .measurement_system
+                .convert_visibility(weather.current.visibility);
+            let visibility_unit = self.config.measurement_system.visibility_unit();
             column = column.push(
                 widget::row()
                     .spacing(20)
-                    .push(text(format!("Visibility: {:.1} mi", weather.current.visibility / 1609.34)).size(14))
-                    .push(text(format!("Pressure: {:.0} hPa", weather.current.pressure)).size(14))
+                    .push(
+                        text(format!("Visibility: {:.1} {}", visibility, visibility_unit)).size(14),
+                    )
+                    .push(text(format!("Pressure: {:.0} hPa", weather.current.pressure)).size(14)),
             );
 
             // Sunrise/Sunset for today
@@ -362,24 +388,34 @@ impl Application for Tempest {
                 column = column.push(
                     widget::row()
                         .spacing(20)
-                        .push(text(format!("Sunrise: {}", format_time(&first_day.sunrise))).size(14))
-                        .push(text(format!("Sunset: {}", format_time(&first_day.sunset))).size(14))
+                        .push(
+                            text(format!("Sunrise: {}", format_time(&first_day.sunrise))).size(14),
+                        )
+                        .push(text(format!("Sunset: {}", format_time(&first_day.sunset))).size(14)),
                 );
             }
 
             column = column.push(widget::divider::horizontal::default());
 
             // Air Quality section with collapsible header
-            let air_quality_icon = if self.air_quality_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
+            let air_quality_icon = if self.air_quality_expanded {
+                "go-down-symbolic"
+            } else {
+                "go-next-symbolic"
+            };
             column = column.push(
                 widget::button::custom(
                     widget::row()
                         .spacing(8)
-                        .push(widget::icon::from_name(air_quality_icon).size(16).symbolic(true))
-                        .push(text("Air Quality"))
+                        .push(
+                            widget::icon::from_name(air_quality_icon)
+                                .size(16)
+                                .symbolic(true),
+                        )
+                        .push(text("Air Quality")),
                 )
-                    .on_press(Message::ToggleAirQuality)
-                    .width(cosmic::iced::Length::Fill)
+                .on_press(Message::ToggleAirQuality)
+                .width(cosmic::iced::Length::Fill),
             );
 
             if self.air_quality_expanded {
@@ -391,26 +427,25 @@ impl Application for Tempest {
                         widget::row()
                             .spacing(20)
                             .push(text(format!("{}: {}", label, aq.aqi)).size(16))
-                            .push(text(description).size(14))
+                            .push(text(description).size(14)),
                     );
 
                     column = column.push(
                         widget::row()
                             .spacing(20)
                             .push(text(format!("PM2.5: {:.1} µg/m³", aq.pm2_5)).size(14))
-                            .push(text(format!("PM10: {:.1} µg/m³", aq.pm10)).size(14))
+                            .push(text(format!("PM10: {:.1} µg/m³", aq.pm10)).size(14)),
                     );
 
                     column = column.push(
                         widget::row()
                             .spacing(20)
                             .push(text(format!("Ozone: {:.1} µg/m³", aq.ozone)).size(14))
-                            .push(text(format!("NO₂: {:.1} µg/m³", aq.nitrogen_dioxide)).size(14))
+                            .push(text(format!("NO₂: {:.1} µg/m³", aq.nitrogen_dioxide)).size(14)),
                     );
 
-                    column = column.push(
-                        text(format!("CO: {:.1} µg/m³", aq.carbon_monoxide)).size(14)
-                    );
+                    column =
+                        column.push(text(format!("CO: {:.1} µg/m³", aq.carbon_monoxide)).size(14));
                 } else {
                     column = column.push(text("Air quality data unavailable").size(14));
                 }
@@ -419,16 +454,20 @@ impl Application for Tempest {
             column = column.push(widget::divider::horizontal::default());
 
             // Hourly forecast with collapsible header
-            let hourly_icon = if self.hourly_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
+            let hourly_icon = if self.hourly_expanded {
+                "go-down-symbolic"
+            } else {
+                "go-next-symbolic"
+            };
             column = column.push(
                 widget::button::custom(
                     widget::row()
                         .spacing(8)
                         .push(widget::icon::from_name(hourly_icon).size(16).symbolic(true))
-                        .push(text("Next 12 Hours"))
+                        .push(text("Next 12 Hours")),
                 )
-                    .on_press(Message::ToggleHourly)
-                    .width(cosmic::iced::Length::Fill)
+                .on_press(Message::ToggleHourly)
+                .width(cosmic::iced::Length::Fill),
             );
 
             if self.hourly_expanded {
@@ -437,9 +476,23 @@ impl Application for Tempest {
                         widget::row()
                             .spacing(10)
                             .push(text(format_hour(&hour.time)).width(70))
-                            .push(widget::icon::from_name(weathercode_to_icon_name(hour.weathercode, false)).size(16).symbolic(true))
-                            .push(text(format!("{:.0}{}", hour.temperature, self.config.temperature_unit.symbol())).width(45))
-                            .push(text(format!("{}%", hour.precipitation_probability)).width(35))
+                            .push(
+                                widget::icon::from_name(weathercode_to_icon_name(
+                                    hour.weathercode,
+                                    false,
+                                ))
+                                .size(16)
+                                .symbolic(true),
+                            )
+                            .push(
+                                text(format!(
+                                    "{:.0}{}",
+                                    hour.temperature,
+                                    self.config.temperature_unit.symbol()
+                                ))
+                                .width(45),
+                            )
+                            .push(text(format!("{}%", hour.precipitation_probability)).width(35)),
                     );
                 }
             }
@@ -447,16 +500,24 @@ impl Application for Tempest {
             column = column.push(widget::divider::horizontal::default());
 
             // 7-day forecast with collapsible header
-            let forecast_icon = if self.forecast_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
+            let forecast_icon = if self.forecast_expanded {
+                "go-down-symbolic"
+            } else {
+                "go-next-symbolic"
+            };
             column = column.push(
                 widget::button::custom(
                     widget::row()
                         .spacing(8)
-                        .push(widget::icon::from_name(forecast_icon).size(16).symbolic(true))
-                        .push(text("7-Day Forecast"))
+                        .push(
+                            widget::icon::from_name(forecast_icon)
+                                .size(16)
+                                .symbolic(true),
+                        )
+                        .push(text("7-Day Forecast")),
                 )
-                    .on_press(Message::ToggleForecast)
-                    .width(cosmic::iced::Length::Fill)
+                .on_press(Message::ToggleForecast)
+                .width(cosmic::iced::Length::Fill),
             );
 
             if self.forecast_expanded {
@@ -465,10 +526,17 @@ impl Application for Tempest {
                         widget::row()
                             .spacing(10)
                             .push(text(format_date(&day.date)).width(90))
-                            .push(widget::icon::from_name(weathercode_to_icon_name(day.weathercode, false)).size(16).symbolic(true))
+                            .push(
+                                widget::icon::from_name(weathercode_to_icon_name(
+                                    day.weathercode,
+                                    false,
+                                ))
+                                .size(16)
+                                .symbolic(true),
+                            )
                             .push(text(format!("{:.0}°", day.temp_max)).width(35))
                             .push(text(format!("{:.0}°", day.temp_min)).width(35))
-                            .push(text(weathercode_to_description(day.weathercode)))
+                            .push(text(weathercode_to_description(day.weathercode))),
                     );
                 }
             }
@@ -476,45 +544,51 @@ impl Application for Tempest {
             column = column.push(widget::divider::horizontal::default());
 
             // Settings section with collapsible header
-            let settings_icon = if self.settings_expanded { "go-down-symbolic" } else { "go-next-symbolic" };
+            let settings_icon = if self.settings_expanded {
+                "go-down-symbolic"
+            } else {
+                "go-next-symbolic"
+            };
             column = column.push(
                 widget::button::custom(
                     widget::row()
                         .spacing(8)
-                        .push(widget::icon::from_name(settings_icon).size(16).symbolic(true))
-                        .push(text("Settings"))
+                        .push(
+                            widget::icon::from_name(settings_icon)
+                                .size(16)
+                                .symbolic(true),
+                        )
+                        .push(text("Settings")),
                 )
-                    .on_press(Message::ToggleSettings)
-                    .width(cosmic::iced::Length::Fill)
+                .on_press(Message::ToggleSettings)
+                .width(cosmic::iced::Length::Fill),
             );
 
             if self.settings_expanded {
-                column = column.push(
-                    settings::item(
-                        "Temperature Unit",
-                        widget::button::standard(self.config.temperature_unit.to_string())
-                            .on_press(Message::ToggleTemperatureUnit)
-                    )
-                );
+                column = column.push(settings::item(
+                    "Temperature Unit",
+                    widget::button::standard(self.config.temperature_unit.as_str())
+                        .on_press(Message::ToggleTemperatureUnit),
+                ));
 
-                column = column.push(
-                    settings::item(
-                        "Auto-detect Location",
-                        widget::row()
-                            .spacing(10)
-                            .push(widget::toggler(self.config.use_auto_location)
-                                .on_toggle(|_| Message::ToggleAutoLocation))
-                            .push(widget::button::standard("Detect Now")
-                                .on_press(Message::DetectLocation))
-                    )
-                );
+                column = column.push(settings::item(
+                    "Auto-detect Location",
+                    widget::row()
+                        .spacing(10)
+                        .push(
+                            widget::toggler(self.config.use_auto_location)
+                                .on_toggle(|_| Message::ToggleAutoLocation),
+                        )
+                        .push(
+                            widget::button::standard("Detect Now")
+                                .on_press(Message::DetectLocation),
+                        ),
+                ));
 
-                column = column.push(
-                    settings::item(
-                        "Current Location",
-                        text(&self.config.location_name)
-                    )
-                );
+                column = column.push(settings::item(
+                    "Current Location",
+                    text(&self.config.location_name),
+                ));
 
                 if !self.config.use_auto_location {
                     column = column.push(text("Search Location").size(14));
@@ -522,12 +596,13 @@ impl Application for Tempest {
                         widget::row()
                             .spacing(10)
                             .padding([0, 20])
-                            .push(widget::text_input("Enter city name...", &self.city_input)
-                                .on_input(Message::UpdateCityInput)
-                                .on_submit(|_| Message::SearchCity)
-                                .width(cosmic::iced::Length::Fill))
-                            .push(widget::button::standard("Search")
-                                .on_press(Message::SearchCity))
+                            .push(
+                                widget::text_input("Enter city name...", &self.city_input)
+                                    .on_input(Message::UpdateCityInput)
+                                    .on_submit(|_| Message::SearchCity)
+                                    .width(cosmic::iced::Length::Fill),
+                            )
+                            .push(widget::button::standard("Search").on_press(Message::SearchCity)),
                     );
 
                     if !self.search_results.is_empty() {
@@ -536,42 +611,33 @@ impl Application for Tempest {
                                 widget::button::text(&result.display_name)
                                     .on_press(Message::SelectLocation(idx))
                                     .padding(8)
-                                    .width(cosmic::iced::Length::Fill)
+                                    .width(cosmic::iced::Length::Fill),
                             );
                         }
                     }
                 }
 
-                column = column.push(
-                    settings::item(
-                        "Refresh Interval (minutes)",
-                        widget::text_input("Minutes", &self.refresh_input)
-                            .on_input(Message::UpdateRefreshInterval)
-                    )
-                );
+                column = column.push(settings::item(
+                    "Refresh Interval (minutes)",
+                    widget::text_input("Minutes", &self.refresh_input)
+                        .on_input(Message::UpdateRefreshInterval),
+                ));
 
                 column = column.push(widget::divider::horizontal::default());
 
                 // Version and support info
-                column = column.push(
-                    settings::item(
-                        "Version",
-                        text(VERSION)
-                    )
-                );
+                column = column.push(settings::item("Version", text(VERSION)));
 
-                column = column.push(
-                    settings::item(
-                        "Support Development",
-                        widget::button::text("Tip me on Ko-fi")
-                            .on_press(Message::OpenUrl("https://ko-fi.com/vintagetechie".to_string()))
-                    )
-                );
+                column = column.push(settings::item(
+                    "Support Development",
+                    widget::button::text("Tip me on Ko-fi").on_press(Message::OpenUrl(
+                        "https://ko-fi.com/vintagetechie".to_string(),
+                    )),
+                ));
             }
         }
 
-        let scrollable = widget::scrollable(column)
-            .height(cosmic::iced::Length::Fill);
+        let scrollable = widget::scrollable(column).height(cosmic::iced::Length::Fill);
 
         self.core.applet.popup_container(scrollable).into()
     }
@@ -614,21 +680,24 @@ impl Application for Tempest {
                 let lat = self.config.latitude;
                 let lon = self.config.longitude;
                 let temp_unit = self.config.temperature_unit.api_param().to_string();
+                let wind_unit = self
+                    .config
+                    .measurement_system
+                    .wind_speed_api_param()
+                    .to_string();
 
                 // Fetch weather and air quality in parallel
                 let weather_task = Task::perform(
                     async move {
-                        fetch_weather(lat, lon, &temp_unit).await
+                        fetch_weather(lat, lon, &temp_unit, &wind_unit)
+                            .await
                             .map_err(|e| e.to_string())
                     },
                     |result| Action::App(Message::WeatherUpdated(result)),
                 );
 
                 let air_quality_task = Task::perform(
-                    async move {
-                        fetch_air_quality(lat, lon).await
-                            .map_err(|e| e.to_string())
-                    },
+                    async move { fetch_air_quality(lat, lon).await.map_err(|e| e.to_string()) },
                     |result| Action::App(Message::AirQualityUpdated(result)),
                 );
 
@@ -640,7 +709,11 @@ impl Application for Tempest {
                 match result {
                     Ok(data) => {
                         self.current_weathercode = data.current.weathercode;
-                        let temp = format!("{:.0}{}", data.current.temperature, self.config.temperature_unit.symbol());
+                        let temp = format!(
+                            "{:.0}{}",
+                            data.current.temperature,
+                            self.config.temperature_unit.symbol()
+                        );
                         self.display_label = temp;
                         self.weather_data = Some(data);
                         self.error_message = None;
@@ -657,35 +730,34 @@ impl Application for Tempest {
                     }
                 }
             }
-            Message::AirQualityUpdated(result) => {
-                match result {
-                    Ok(data) => {
-                        self.current_aqi = Some((data.aqi, data.standard));
-                        self.air_quality = Some(data);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to fetch air quality: {}", e);
-                        self.current_aqi = None;
-                        self.air_quality = None;
-                    }
+            Message::AirQualityUpdated(result) => match result {
+                Ok(data) => {
+                    self.current_aqi = Some((data.aqi, data.standard));
+                    self.air_quality = Some(data);
                 }
-            }
+                Err(e) => {
+                    eprintln!("Failed to fetch air quality: {}", e);
+                    self.current_aqi = None;
+                    self.air_quality = None;
+                }
+            },
             Message::Tick => {
-                return Task::perform(
-                    async { Message::RefreshWeather },
-                    Action::App
-                );
+                return Task::perform(async { Message::RefreshWeather }, Action::App);
             }
             Message::ToggleTemperatureUnit => {
-                self.config.temperature_unit = match self.config.temperature_unit {
-                    TemperatureUnit::Fahrenheit => TemperatureUnit::Celsius,
-                    TemperatureUnit::Celsius => TemperatureUnit::Fahrenheit,
+                // Toggle temperature unit and sync measurement system
+                match self.config.temperature_unit {
+                    TemperatureUnit::Fahrenheit => {
+                        self.config.temperature_unit = TemperatureUnit::Celsius;
+                        self.config.measurement_system = MeasurementSystem::Metric;
+                    }
+                    TemperatureUnit::Celsius => {
+                        self.config.temperature_unit = TemperatureUnit::Fahrenheit;
+                        self.config.measurement_system = MeasurementSystem::Imperial;
+                    }
                 };
                 self.save_config();
-                return Task::perform(
-                    async { Message::RefreshWeather },
-                    Action::App
-                );
+                return Task::perform(async { Message::RefreshWeather }, Action::App);
             }
             Message::UpdateCityInput(value) => {
                 self.city_input = value;
@@ -694,38 +766,34 @@ impl Application for Tempest {
                 let city = self.city_input.clone();
                 if !city.is_empty() {
                     return Task::perform(
-                        async move {
-                            search_city(&city).await
-                                .map_err(|e| e.to_string())
-                        },
+                        async move { search_city(&city).await.map_err(|e| e.to_string()) },
                         |result| Action::App(Message::CitySearchResult(result)),
                     );
                 }
             }
-            Message::CitySearchResult(result) => {
-                match result {
-                    Ok(results) => {
-                        self.search_results = results;
-                    }
-                    Err(e) => {
-                        eprintln!("City search failed: {}", e);
-                        self.search_results.clear();
-                    }
+            Message::CitySearchResult(result) => match result {
+                Ok(results) => {
+                    self.search_results = results;
                 }
-            }
+                Err(e) => {
+                    eprintln!("City search failed: {}", e);
+                    self.search_results.clear();
+                }
+            },
             Message::SelectLocation(idx) => {
                 if let Some(location) = self.search_results.get(idx) {
                     self.config.latitude = location.latitude;
                     self.config.longitude = location.longitude;
                     self.config.location_name = location.display_name.clone();
                     self.config.use_auto_location = false;
+                    // Update manual location storage
+                    self.config.manual_latitude = Some(location.latitude);
+                    self.config.manual_longitude = Some(location.longitude);
+                    self.config.manual_location_name = Some(location.display_name.clone());
                     self.city_input.clear();
                     self.search_results.clear();
                     self.save_config();
-                    return Task::perform(
-                        async { Message::RefreshWeather },
-                        Action::App
-                    );
+                    return Task::perform(async { Message::RefreshWeather }, Action::App);
                 }
             }
             Message::UpdateRefreshInterval(value) => {
@@ -739,44 +807,52 @@ impl Application for Tempest {
             }
             Message::ToggleAutoLocation => {
                 self.config.use_auto_location = !self.config.use_auto_location;
-                self.save_config();
 
                 if self.config.use_auto_location {
+                    // Save current manual location before switching to auto
+                    self.config.manual_latitude = Some(self.config.latitude);
+                    self.config.manual_longitude = Some(self.config.longitude);
+                    self.config.manual_location_name = Some(self.config.location_name.clone());
+                    self.save_config();
+
                     return Task::perform(
-                        async {
-                            detect_location().await
-                                .map_err(|e| e.to_string())
-                        },
+                        async { detect_location().await.map_err(|e| e.to_string()) },
                         |result| Action::App(Message::LocationDetected(result)),
                     );
+                } else {
+                    // Restore previous manual location if available
+                    if let (Some(lat), Some(lon), Some(name)) = (
+                        self.config.manual_latitude,
+                        self.config.manual_longitude,
+                        self.config.manual_location_name.clone(),
+                    ) {
+                        self.config.latitude = lat;
+                        self.config.longitude = lon;
+                        self.config.location_name = name;
+                    }
+                    self.save_config();
+
+                    return Task::perform(async { Message::RefreshWeather }, Action::App);
                 }
             }
             Message::DetectLocation => {
                 return Task::perform(
-                    async {
-                        detect_location().await
-                            .map_err(|e| e.to_string())
-                    },
+                    async { detect_location().await.map_err(|e| e.to_string()) },
                     |result| Action::App(Message::LocationDetected(result)),
                 );
             }
-            Message::LocationDetected(result) => {
-                match result {
-                    Ok((lat, lon, location_name)) => {
-                        self.config.latitude = lat;
-                        self.config.longitude = lon;
-                        self.config.location_name = location_name;
-                        self.save_config();
-                        return Task::perform(
-                            async { Message::RefreshWeather },
-                            Action::App
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to detect location: {}", e);
-                    }
+            Message::LocationDetected(result) => match result {
+                Ok((lat, lon, location_name)) => {
+                    self.config.latitude = lat;
+                    self.config.longitude = lon;
+                    self.config.location_name = location_name;
+                    self.save_config();
+                    return Task::perform(async { Message::RefreshWeather }, Action::App);
                 }
-            }
+                Err(e) => {
+                    eprintln!("Failed to detect location: {}", e);
+                }
+            },
             Message::ToggleHourly => {
                 self.hourly_expanded = !self.hourly_expanded;
             }
