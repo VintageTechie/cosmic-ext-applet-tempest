@@ -261,389 +261,28 @@ impl Application for Tempest {
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
         let mut column = widget::column().spacing(10).padding(10).max_width(500);
 
-        // Add header with location name and refresh button
-        let header = widget::row()
-            .spacing(10)
-            .push(text(&self.config.location_name).size(16))
-            .push(widget::horizontal_space())
-            .push(
-                widget::button::icon(widget::icon::from_name("view-refresh-symbolic"))
-                    .on_press(Message::RefreshWeather)
-                    .padding(8),
-            );
-        column = column.push(header);
+        column = column.push(self.view_header());
 
-        // Add last updated timestamp if available
-        if let Some(timestamp) = self.config.last_updated {
-            if let Some(datetime) = chrono::DateTime::from_timestamp(timestamp, 0) {
-                let local_time: chrono::DateTime<chrono::Local> = datetime.into();
-                let formatted_time = local_time
-                    .format("%I:%M %p")
-                    .to_string()
-                    .trim_start_matches('0')
-                    .to_string();
-                column = column.push(text(format!("Updated: {}", formatted_time)).size(12));
-            }
+        if let Some(last_updated) = self.view_last_updated() {
+            column = column.push(last_updated);
         }
 
         column = column.push(widget::divider::horizontal::default());
 
-        // Show error message if there is one
         if let Some(ref error) = self.error_message {
-            column = column.push(
-                widget::container(
-                    widget::column()
-                        .spacing(10)
-                        .push(widget::icon::from_name("dialog-error-symbolic").size(48))
-                        .push(text("Failed to load weather").size(18))
-                        .push(text(error).size(14))
-                        .push(widget::button::standard("Retry").on_press(Message::RefreshWeather)),
-                )
-                .align_x(cosmic::iced::alignment::Horizontal::Center)
-                .width(cosmic::iced::Length::Fill),
-            );
+            column = column.push(self.view_error(error));
         } else if self.is_loading {
-            column = column.push(
-                widget::container(
-                    widget::column()
-                        .spacing(10)
-                        .align_x(cosmic::iced::alignment::Horizontal::Center)
-                        .push(widget::icon::from_name("content-loading-symbolic").size(48))
-                        .push(text("Loading weather data...").size(18)),
-                )
-                .align_x(cosmic::iced::alignment::Horizontal::Center)
-                .width(cosmic::iced::Length::Fill),
-            );
+            column = column.push(self.view_loading());
         } else if let Some(ref weather) = self.weather_data {
-            // Current conditions
-            column = column.push(
-                widget::row()
-                    .spacing(10)
-                    .push(
-                        text(format!(
-                            "{:.0}{}",
-                            weather.current.temperature,
-                            self.config.temperature_unit.symbol()
-                        ))
-                        .size(32),
-                    )
-                    .push(text(weathercode_to_description(
-                        weather.current.weathercode,
-                    ))),
-            );
-
-            // Additional current conditions
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(
-                        text(format!(
-                            "Feels like: {:.0}{}",
-                            weather.current.feels_like,
-                            self.config.temperature_unit.symbol()
-                        ))
-                        .size(14),
-                    )
-                    .push(text(format!("Humidity: {}%", weather.current.humidity)).size(14)),
-            );
-
-            // Wind information
-            let wind_unit = self.config.measurement_system.wind_speed_unit();
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(
-                        text(format!(
-                            "Wind: {:.1} {} {}",
-                            weather.current.windspeed,
-                            wind_unit,
-                            wind_direction_to_compass(weather.current.wind_direction)
-                        ))
-                        .size(14),
-                    )
-                    .push(
-                        text(format!(
-                            "Gusts: {:.1} {}",
-                            weather.current.wind_gusts, wind_unit
-                        ))
-                        .size(14),
-                    ),
-            );
-
-            // Additional weather details
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(text(format!("UV Index: {:.1}", weather.current.uv_index)).size(14))
-                    .push(text(format!("Cloud Cover: {}%", weather.current.cloud_cover)).size(14)),
-            );
-
-            let visibility = self
-                .config
-                .measurement_system
-                .convert_visibility(weather.current.visibility);
-            let visibility_unit = self.config.measurement_system.visibility_unit();
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(
-                        text(format!("Visibility: {:.1} {}", visibility, visibility_unit)).size(14),
-                    )
-                    .push(text(format!("Pressure: {:.0} hPa", weather.current.pressure)).size(14)),
-            );
-
-            // Sunrise/Sunset for today
-            if let Some(first_day) = weather.forecast.first() {
-                column = column.push(
-                    widget::row()
-                        .spacing(20)
-                        .push(
-                            text(format!("Sunrise: {}", format_time(&first_day.sunrise))).size(14),
-                        )
-                        .push(text(format!("Sunset: {}", format_time(&first_day.sunset))).size(14)),
-                );
-            }
-
+            column = column.push(self.view_current_conditions(weather));
             column = column.push(widget::divider::horizontal::default());
-
-            // Air Quality section with collapsible header
-            let air_quality_icon = if self.air_quality_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(
-                            widget::icon::from_name(air_quality_icon)
-                                .size(16)
-                                .symbolic(true),
-                        )
-                        .push(text("Air Quality")),
-                )
-                .on_press(Message::ToggleAirQuality)
-                .width(cosmic::iced::Length::Fill),
-            );
-
-            if self.air_quality_expanded {
-                if let Some(ref aq) = self.air_quality {
-                    let label = aqi_standard_label(aq.standard);
-                    let description = aqi_to_description(aq.aqi, aq.standard);
-
-                    column = column.push(
-                        widget::row()
-                            .spacing(20)
-                            .push(text(format!("{}: {}", label, aq.aqi)).size(16))
-                            .push(text(description).size(14)),
-                    );
-
-                    column = column.push(
-                        widget::row()
-                            .spacing(20)
-                            .push(text(format!("PM2.5: {:.1} µg/m³", aq.pm2_5)).size(14))
-                            .push(text(format!("PM10: {:.1} µg/m³", aq.pm10)).size(14)),
-                    );
-
-                    column = column.push(
-                        widget::row()
-                            .spacing(20)
-                            .push(text(format!("Ozone: {:.1} µg/m³", aq.ozone)).size(14))
-                            .push(text(format!("NO₂: {:.1} µg/m³", aq.nitrogen_dioxide)).size(14)),
-                    );
-
-                    column =
-                        column.push(text(format!("CO: {:.1} µg/m³", aq.carbon_monoxide)).size(14));
-                } else {
-                    column = column.push(text("Air quality data unavailable").size(14));
-                }
-            }
-
+            column = column.push(self.view_air_quality_section());
             column = column.push(widget::divider::horizontal::default());
-
-            // Hourly forecast with collapsible header
-            let hourly_icon = if self.hourly_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(widget::icon::from_name(hourly_icon).size(16).symbolic(true))
-                        .push(text("Next 12 Hours")),
-                )
-                .on_press(Message::ToggleHourly)
-                .width(cosmic::iced::Length::Fill),
-            );
-
-            if self.hourly_expanded {
-                for hour in &weather.hourly {
-                    column = column.push(
-                        widget::row()
-                            .spacing(10)
-                            .push(text(format_hour(&hour.time)).width(70))
-                            .push(
-                                widget::icon::from_name(weathercode_to_icon_name(
-                                    hour.weathercode,
-                                    false,
-                                ))
-                                .size(16)
-                                .symbolic(true),
-                            )
-                            .push(
-                                text(format!(
-                                    "{:.0}{}",
-                                    hour.temperature,
-                                    self.config.temperature_unit.symbol()
-                                ))
-                                .width(45),
-                            )
-                            .push(text(format!("{}%", hour.precipitation_probability)).width(35)),
-                    );
-                }
-            }
-
+            column = column.push(self.view_hourly_section(weather));
             column = column.push(widget::divider::horizontal::default());
-
-            // 7-day forecast with collapsible header
-            let forecast_icon = if self.forecast_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(
-                            widget::icon::from_name(forecast_icon)
-                                .size(16)
-                                .symbolic(true),
-                        )
-                        .push(text("7-Day Forecast")),
-                )
-                .on_press(Message::ToggleForecast)
-                .width(cosmic::iced::Length::Fill),
-            );
-
-            if self.forecast_expanded {
-                for day in &weather.forecast {
-                    column = column.push(
-                        widget::row()
-                            .spacing(10)
-                            .push(text(format_date(&day.date)).width(90))
-                            .push(
-                                widget::icon::from_name(weathercode_to_icon_name(
-                                    day.weathercode,
-                                    false,
-                                ))
-                                .size(16)
-                                .symbolic(true),
-                            )
-                            .push(text(format!("{:.0}°", day.temp_max)).width(35))
-                            .push(text(format!("{:.0}°", day.temp_min)).width(35))
-                            .push(text(weathercode_to_description(day.weathercode))),
-                    );
-                }
-            }
-
+            column = column.push(self.view_forecast_section(weather));
             column = column.push(widget::divider::horizontal::default());
-
-            // Settings section with collapsible header
-            let settings_icon = if self.settings_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(
-                            widget::icon::from_name(settings_icon)
-                                .size(16)
-                                .symbolic(true),
-                        )
-                        .push(text("Settings")),
-                )
-                .on_press(Message::ToggleSettings)
-                .width(cosmic::iced::Length::Fill),
-            );
-
-            if self.settings_expanded {
-                column = column.push(settings::item(
-                    "Temperature Unit",
-                    widget::button::standard(self.config.temperature_unit.as_str())
-                        .on_press(Message::ToggleTemperatureUnit),
-                ));
-
-                column = column.push(settings::item(
-                    "Auto-detect Location",
-                    widget::row()
-                        .spacing(10)
-                        .push(
-                            widget::toggler(self.config.use_auto_location)
-                                .on_toggle(|_| Message::ToggleAutoLocation),
-                        )
-                        .push(
-                            widget::button::standard("Detect Now")
-                                .on_press(Message::DetectLocation),
-                        ),
-                ));
-
-                column = column.push(settings::item(
-                    "Current Location",
-                    text(&self.config.location_name),
-                ));
-
-                if !self.config.use_auto_location {
-                    column = column.push(text("Search Location").size(14));
-                    column = column.push(
-                        widget::row()
-                            .spacing(10)
-                            .padding([0, 20])
-                            .push(
-                                widget::text_input("Enter city name...", &self.city_input)
-                                    .on_input(Message::UpdateCityInput)
-                                    .on_submit(|_| Message::SearchCity)
-                                    .width(cosmic::iced::Length::Fill),
-                            )
-                            .push(widget::button::standard("Search").on_press(Message::SearchCity)),
-                    );
-
-                    if !self.search_results.is_empty() {
-                        for (idx, result) in self.search_results.iter().enumerate() {
-                            column = column.push(
-                                widget::button::text(&result.display_name)
-                                    .on_press(Message::SelectLocation(idx))
-                                    .padding(8)
-                                    .width(cosmic::iced::Length::Fill),
-                            );
-                        }
-                    }
-                }
-
-                column = column.push(settings::item(
-                    "Refresh Interval (minutes)",
-                    widget::text_input("Minutes", &self.refresh_input)
-                        .on_input(Message::UpdateRefreshInterval),
-                ));
-
-                column = column.push(widget::divider::horizontal::default());
-
-                // Version and support info
-                column = column.push(settings::item("Version", text(VERSION)));
-
-                column = column.push(settings::item(
-                    "Support Development",
-                    widget::button::text("Tip me on Ko-fi").on_press(Message::OpenUrl(
-                        "https://ko-fi.com/vintagetechie".to_string(),
-                    )),
-                ));
-            }
+            column = column.push(self.view_settings_section());
         }
 
         let scrollable = widget::scrollable(column).height(cosmic::iced::Length::Fill);
@@ -892,8 +531,395 @@ impl Tempest {
     fn save_config(&self) {
         if let Some(ref handler) = self.config_handler {
             if let Err(e) = self.config.write_entry(handler) {
-                eprintln!("Failed to save config: {}", e);
+                eprintln!("Failed to save config: {e}");
             }
         }
+    }
+
+    /// Builds the header row with location name and refresh button.
+    fn view_header(&self) -> Element<'_, Message> {
+        widget::row()
+            .spacing(10)
+            .push(text(&self.config.location_name).size(16))
+            .push(widget::horizontal_space())
+            .push(
+                widget::button::icon(widget::icon::from_name("view-refresh-symbolic"))
+                    .on_press(Message::RefreshWeather)
+                    .padding(8),
+            )
+            .into()
+    }
+
+    /// Builds the "last updated" timestamp display.
+    fn view_last_updated(&self) -> Option<Element<'_, Message>> {
+        let timestamp = self.config.last_updated?;
+        let datetime = chrono::DateTime::from_timestamp(timestamp, 0)?;
+        let local_time: chrono::DateTime<chrono::Local> = datetime.into();
+        let formatted_time = local_time
+            .format("%I:%M %p")
+            .to_string()
+            .trim_start_matches('0')
+            .to_string();
+        Some(text(format!("Updated: {formatted_time}")).size(12).into())
+    }
+
+    /// Builds the error state display.
+    fn view_error<'a>(&'a self, error: &'a str) -> Element<'a, Message> {
+        widget::container(
+            widget::column()
+                .spacing(10)
+                .push(widget::icon::from_name("dialog-error-symbolic").size(48))
+                .push(text("Failed to load weather").size(18))
+                .push(text(error).size(14))
+                .push(widget::button::standard("Retry").on_press(Message::RefreshWeather)),
+        )
+        .align_x(cosmic::iced::alignment::Horizontal::Center)
+        .width(cosmic::iced::Length::Fill)
+        .into()
+    }
+
+    /// Builds the loading state display.
+    fn view_loading(&self) -> Element<'_, Message> {
+        widget::container(
+            widget::column()
+                .spacing(10)
+                .align_x(cosmic::iced::alignment::Horizontal::Center)
+                .push(widget::icon::from_name("content-loading-symbolic").size(48))
+                .push(text("Loading weather data...").size(18)),
+        )
+        .align_x(cosmic::iced::alignment::Horizontal::Center)
+        .width(cosmic::iced::Length::Fill)
+        .into()
+    }
+
+    /// Builds the current weather conditions display.
+    fn view_current_conditions(&self, weather: &WeatherData) -> Element<'_, Message> {
+        let wind_unit = self.config.measurement_system.wind_speed_unit();
+        let visibility = self
+            .config
+            .measurement_system
+            .convert_visibility(weather.current.visibility);
+        let visibility_unit = self.config.measurement_system.visibility_unit();
+
+        let mut column = widget::column().spacing(10);
+
+        column = column.push(
+            widget::row()
+                .spacing(10)
+                .push(
+                    text(format!(
+                        "{:.0}{}",
+                        weather.current.temperature,
+                        self.config.temperature_unit.symbol()
+                    ))
+                    .size(32),
+                )
+                .push(text(weathercode_to_description(
+                    weather.current.weathercode,
+                ))),
+        );
+
+        column = column.push(
+            widget::row()
+                .spacing(20)
+                .push(
+                    text(format!(
+                        "Feels like: {:.0}{}",
+                        weather.current.feels_like,
+                        self.config.temperature_unit.symbol()
+                    ))
+                    .size(14),
+                )
+                .push(text(format!("Humidity: {}%", weather.current.humidity)).size(14)),
+        );
+
+        column = column.push(
+            widget::row()
+                .spacing(20)
+                .push(
+                    text(format!(
+                        "Wind: {:.1} {} {}",
+                        weather.current.windspeed,
+                        wind_unit,
+                        wind_direction_to_compass(weather.current.wind_direction)
+                    ))
+                    .size(14),
+                )
+                .push(
+                    text(format!(
+                        "Gusts: {:.1} {}",
+                        weather.current.wind_gusts, wind_unit
+                    ))
+                    .size(14),
+                ),
+        );
+
+        column = column.push(
+            widget::row()
+                .spacing(20)
+                .push(text(format!("UV Index: {:.1}", weather.current.uv_index)).size(14))
+                .push(text(format!("Cloud Cover: {}%", weather.current.cloud_cover)).size(14)),
+        );
+
+        column = column.push(
+            widget::row()
+                .spacing(20)
+                .push(text(format!("Visibility: {visibility:.1} {visibility_unit}")).size(14))
+                .push(text(format!("Pressure: {:.0} hPa", weather.current.pressure)).size(14)),
+        );
+
+        if let Some(first_day) = weather.forecast.first() {
+            column = column.push(
+                widget::row()
+                    .spacing(20)
+                    .push(text(format!("Sunrise: {}", format_time(&first_day.sunrise))).size(14))
+                    .push(text(format!("Sunset: {}", format_time(&first_day.sunset))).size(14)),
+            );
+        }
+
+        column.into()
+    }
+
+    /// Builds the collapsible air quality section.
+    fn view_air_quality_section(&self) -> Element<'_, Message> {
+        let icon_name = if self.air_quality_expanded {
+            "go-down-symbolic"
+        } else {
+            "go-next-symbolic"
+        };
+
+        let mut column = widget::column().spacing(10);
+
+        column = column.push(
+            widget::button::custom(
+                widget::row()
+                    .spacing(8)
+                    .push(widget::icon::from_name(icon_name).size(16).symbolic(true))
+                    .push(text("Air Quality")),
+            )
+            .on_press(Message::ToggleAirQuality)
+            .width(cosmic::iced::Length::Fill),
+        );
+
+        if self.air_quality_expanded {
+            if let Some(ref aq) = self.air_quality {
+                let label = aqi_standard_label(aq.standard);
+                let description = aqi_to_description(aq.aqi, aq.standard);
+
+                column = column.push(
+                    widget::row()
+                        .spacing(20)
+                        .push(text(format!("{label}: {}", aq.aqi)).size(16))
+                        .push(text(description).size(14)),
+                );
+
+                column = column.push(
+                    widget::row()
+                        .spacing(20)
+                        .push(text(format!("PM2.5: {:.1} µg/m³", aq.pm2_5)).size(14))
+                        .push(text(format!("PM10: {:.1} µg/m³", aq.pm10)).size(14)),
+                );
+
+                column = column.push(
+                    widget::row()
+                        .spacing(20)
+                        .push(text(format!("Ozone: {:.1} µg/m³", aq.ozone)).size(14))
+                        .push(text(format!("NO₂: {:.1} µg/m³", aq.nitrogen_dioxide)).size(14)),
+                );
+
+                column = column.push(text(format!("CO: {:.1} µg/m³", aq.carbon_monoxide)).size(14));
+            } else {
+                column = column.push(text("Air quality data unavailable").size(14));
+            }
+        }
+
+        column.into()
+    }
+
+    /// Builds the collapsible hourly forecast section.
+    fn view_hourly_section(&self, weather: &WeatherData) -> Element<'_, Message> {
+        let icon_name = if self.hourly_expanded {
+            "go-down-symbolic"
+        } else {
+            "go-next-symbolic"
+        };
+
+        let mut column = widget::column().spacing(10);
+
+        column = column.push(
+            widget::button::custom(
+                widget::row()
+                    .spacing(8)
+                    .push(widget::icon::from_name(icon_name).size(16).symbolic(true))
+                    .push(text("Next 12 Hours")),
+            )
+            .on_press(Message::ToggleHourly)
+            .width(cosmic::iced::Length::Fill),
+        );
+
+        if self.hourly_expanded {
+            for hour in &weather.hourly {
+                column = column.push(
+                    widget::row()
+                        .spacing(10)
+                        .push(text(format_hour(&hour.time)).width(70))
+                        .push(
+                            widget::icon::from_name(weathercode_to_icon_name(
+                                hour.weathercode,
+                                false,
+                            ))
+                            .size(16)
+                            .symbolic(true),
+                        )
+                        .push(
+                            text(format!(
+                                "{:.0}{}",
+                                hour.temperature,
+                                self.config.temperature_unit.symbol()
+                            ))
+                            .width(45),
+                        )
+                        .push(text(format!("{}%", hour.precipitation_probability)).width(35)),
+                );
+            }
+        }
+
+        column.into()
+    }
+
+    /// Builds the collapsible 7-day forecast section.
+    fn view_forecast_section(&self, weather: &WeatherData) -> Element<'_, Message> {
+        let icon_name = if self.forecast_expanded {
+            "go-down-symbolic"
+        } else {
+            "go-next-symbolic"
+        };
+
+        let mut column = widget::column().spacing(10);
+
+        column = column.push(
+            widget::button::custom(
+                widget::row()
+                    .spacing(8)
+                    .push(widget::icon::from_name(icon_name).size(16).symbolic(true))
+                    .push(text("7-Day Forecast")),
+            )
+            .on_press(Message::ToggleForecast)
+            .width(cosmic::iced::Length::Fill),
+        );
+
+        if self.forecast_expanded {
+            for day in &weather.forecast {
+                column = column.push(
+                    widget::row()
+                        .spacing(10)
+                        .push(text(format_date(&day.date)).width(90))
+                        .push(
+                            widget::icon::from_name(weathercode_to_icon_name(day.weathercode, false))
+                                .size(16)
+                                .symbolic(true),
+                        )
+                        .push(text(format!("{:.0}°", day.temp_max)).width(35))
+                        .push(text(format!("{:.0}°", day.temp_min)).width(35))
+                        .push(text(weathercode_to_description(day.weathercode))),
+                );
+            }
+        }
+
+        column.into()
+    }
+
+    /// Builds the collapsible settings section.
+    fn view_settings_section(&self) -> Element<'_, Message> {
+        let icon_name = if self.settings_expanded {
+            "go-down-symbolic"
+        } else {
+            "go-next-symbolic"
+        };
+
+        let mut column = widget::column().spacing(10);
+
+        column = column.push(
+            widget::button::custom(
+                widget::row()
+                    .spacing(8)
+                    .push(widget::icon::from_name(icon_name).size(16).symbolic(true))
+                    .push(text("Settings")),
+            )
+            .on_press(Message::ToggleSettings)
+            .width(cosmic::iced::Length::Fill),
+        );
+
+        if self.settings_expanded {
+            column = column.push(settings::item(
+                "Temperature Unit",
+                widget::button::standard(self.config.temperature_unit.as_str())
+                    .on_press(Message::ToggleTemperatureUnit),
+            ));
+
+            column = column.push(settings::item(
+                "Auto-detect Location",
+                widget::row()
+                    .spacing(10)
+                    .push(
+                        widget::toggler(self.config.use_auto_location)
+                            .on_toggle(|_| Message::ToggleAutoLocation),
+                    )
+                    .push(
+                        widget::button::standard("Detect Now").on_press(Message::DetectLocation),
+                    ),
+            ));
+
+            column = column.push(settings::item(
+                "Current Location",
+                text(&self.config.location_name),
+            ));
+
+            if !self.config.use_auto_location {
+                column = column.push(text("Search Location").size(14));
+                column = column.push(
+                    widget::row()
+                        .spacing(10)
+                        .padding([0, 20])
+                        .push(
+                            widget::text_input("Enter city name...", &self.city_input)
+                                .on_input(Message::UpdateCityInput)
+                                .on_submit(|_| Message::SearchCity)
+                                .width(cosmic::iced::Length::Fill),
+                        )
+                        .push(widget::button::standard("Search").on_press(Message::SearchCity)),
+                );
+
+                if !self.search_results.is_empty() {
+                    for (idx, result) in self.search_results.iter().enumerate() {
+                        column = column.push(
+                            widget::button::text(&result.display_name)
+                                .on_press(Message::SelectLocation(idx))
+                                .padding(8)
+                                .width(cosmic::iced::Length::Fill),
+                        );
+                    }
+                }
+            }
+
+            column = column.push(settings::item(
+                "Refresh Interval (minutes)",
+                widget::text_input("Minutes", &self.refresh_input)
+                    .on_input(Message::UpdateRefreshInterval),
+            ));
+
+            column = column.push(widget::divider::horizontal::default());
+
+            column = column.push(settings::item("Version", text(VERSION)));
+
+            column = column.push(settings::item(
+                "Support Development",
+                widget::button::text("Tip me on Ko-fi").on_press(Message::OpenUrl(
+                    "https://ko-fi.com/vintagetechie".to_string(),
+                )),
+            ));
+        }
+
+        column.into()
     }
 }
