@@ -2,24 +2,29 @@
 
 A weather applet for COSMIC Desktop with automatic location detection.
 
+## Screenshots
+
+| Main | Air Quality | 7-Day Forecast | Settings |
+|------|-------------|----------------|----------|
+| ![Main](screenshots/tempest-main.png) | ![Air Quality](screenshots/tempest-aiq.png) | ![7-Day](screenshots/tempest-7day.png) | ![Settings](screenshots/tempest-settings.png) |
+
 ## Features
 
 - Real-time weather data from Open-Meteo API (no API key required)
-- Current temperature displayed in panel
-- Detailed popup showing:
-  - Location name and manual refresh button in header
-  - Last updated timestamp
+- Current temperature and AQI displayed in panel
+- Detailed popup with tabbed interface:
   - Current conditions (temperature, feels-like, humidity)
   - Wind information (speed, direction, gusts)
-  - UV index and cloud cover
-  - Visibility and atmospheric pressure
+  - UV index, cloud cover, visibility, pressure
   - Sunrise and sunset times
-  - Collapsible hourly forecast (next 12 hours)
-  - Collapsible 7-day forecast with high/low temperatures
-- Configurable settings:
-  - Temperature unit (Fahrenheit/Celsius)
-  - Location (latitude/longitude)
-  - Refresh interval
+  - **Air Quality tab**: AQI, PM2.5, PM10, Ozone, NO2, CO levels
+  - **Hourly tab**: Next 12 hours forecast
+  - **7-Day tab**: Weekly forecast with high/low temperatures
+  - **Settings tab**: All configuration options
+- Automatic location detection via IP geolocation
+- Remembers last selected tab between sessions
+- Configurable temperature unit (Fahrenheit/Celsius)
+- Configurable refresh interval
 - Persistent configuration
 - Global weather coverage
 

@@ -10,7 +10,7 @@ use cosmic::widget::{self, settings, text};
 use cosmic::{Action, Application, Element};
 use std::time::Duration;
 
-use crate::config::{Config, MeasurementSystem, TemperatureUnit};
+use crate::config::{Config, MeasurementSystem, PopupTab, TemperatureUnit};
 use crate::weather::{
     aqi_standard_label, aqi_to_description, detect_location, fetch_air_quality, fetch_weather,
     format_date, format_hour, format_time, is_night_time, search_city, weathercode_to_description,
@@ -50,11 +50,8 @@ pub struct Tempest {
     is_loading: bool,
     /// Error state
     error_message: Option<String>,
-    /// Collapsible section states
-    hourly_expanded: bool,
-    forecast_expanded: bool,
-    settings_expanded: bool,
-    air_quality_expanded: bool,
+    /// Active tab in the popup
+    active_tab: PopupTab,
 }
 
 impl Default for Tempest {
@@ -73,19 +70,14 @@ impl Default for Tempest {
             current_aqi: None,
             is_loading: true,
             error_message: None,
-            hourly_expanded: true,
-            forecast_expanded: true,
-            settings_expanded: true,
-            air_quality_expanded: true,
+            active_tab: PopupTab::default(),
             config,
             config_handler: None,
         }
     }
 }
 
-/// This is the enum that contains all the possible variants that your application will need to transmit messages.
-/// This is used to communicate between the different parts of your application.
-/// If your application does not need to send messages, you can use an empty enum or `()`.
+/// Message variants for application communication.
 #[derive(Debug, Clone)]
 pub enum Message {
     TogglePopup,
@@ -103,10 +95,7 @@ pub enum Message {
     DetectLocation,
     LocationDetected(Result<(f64, f64, String), String>),
     ToggleAutoLocation,
-    ToggleHourly,
-    ToggleForecast,
-    ToggleSettings,
-    ToggleAirQuality,
+    SelectTab(PopupTab),
     OpenUrl(String),
 }
 
@@ -150,6 +139,7 @@ impl Application for Tempest {
             .unwrap_or_default();
 
         let refresh_input = config.refresh_interval_minutes.to_string();
+        let active_tab = config.default_tab;
 
         let app = Tempest {
             core,
@@ -159,6 +149,7 @@ impl Application for Tempest {
             refresh_input,
             search_results: Vec::new(),
             display_label: "...".to_string(),
+            active_tab,
             ..Default::default()
         };
 
@@ -406,243 +397,196 @@ impl Application for Tempest {
 
             column = column.push(widget::divider::horizontal::default());
 
-            // Air Quality section with collapsible header
-            let air_quality_icon = if self.air_quality_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(
-                            widget::icon::from_name(air_quality_icon)
-                                .size(16)
-                                .symbolic(true),
-                        )
-                        .push(text("Air Quality")),
-                )
-                .on_press(Message::ToggleAirQuality)
-                .width(cosmic::iced::Length::Fill),
-            );
+            // Tab bar
+            let air_btn = widget::button::text("Air").on_press(Message::SelectTab(PopupTab::AirQuality));
+            let hourly_btn = widget::button::text("Hourly").on_press(Message::SelectTab(PopupTab::Hourly));
+            let forecast_btn = widget::button::text("7-Day").on_press(Message::SelectTab(PopupTab::Forecast));
+            let settings_btn = widget::button::text("Settings").on_press(Message::SelectTab(PopupTab::Settings));
 
-            if self.air_quality_expanded {
-                if let Some(ref aq) = self.air_quality {
-                    let label = aqi_standard_label(aq.standard);
-                    let description = aqi_to_description(aq.aqi, aq.standard);
-
-                    column = column.push(
-                        widget::row()
-                            .spacing(20)
-                            .push(text(format!("{}: {}", label, aq.aqi)).size(16))
-                            .push(text(description).size(14)),
-                    );
-
-                    column = column.push(
-                        widget::row()
-                            .spacing(20)
-                            .push(text(format!("PM2.5: {:.1} µg/m³", aq.pm2_5)).size(14))
-                            .push(text(format!("PM10: {:.1} µg/m³", aq.pm10)).size(14)),
-                    );
-
-                    column = column.push(
-                        widget::row()
-                            .spacing(20)
-                            .push(text(format!("Ozone: {:.1} µg/m³", aq.ozone)).size(14))
-                            .push(text(format!("NO₂: {:.1} µg/m³", aq.nitrogen_dioxide)).size(14)),
-                    );
-
-                    column =
-                        column.push(text(format!("CO: {:.1} µg/m³", aq.carbon_monoxide)).size(14));
+            let tab_bar = widget::row()
+                .spacing(4)
+                .push(if self.active_tab == PopupTab::AirQuality {
+                    air_btn.class(cosmic::theme::Button::Suggested)
                 } else {
-                    column = column.push(text("Air quality data unavailable").size(14));
-                }
-            }
+                    air_btn
+                })
+                .push(if self.active_tab == PopupTab::Hourly {
+                    hourly_btn.class(cosmic::theme::Button::Suggested)
+                } else {
+                    hourly_btn
+                })
+                .push(if self.active_tab == PopupTab::Forecast {
+                    forecast_btn.class(cosmic::theme::Button::Suggested)
+                } else {
+                    forecast_btn
+                })
+                .push(if self.active_tab == PopupTab::Settings {
+                    settings_btn.class(cosmic::theme::Button::Suggested)
+                } else {
+                    settings_btn
+                });
 
+            column = column.push(tab_bar);
             column = column.push(widget::divider::horizontal::default());
 
-            // Hourly forecast with collapsible header
-            let hourly_icon = if self.hourly_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(widget::icon::from_name(hourly_icon).size(16).symbolic(true))
-                        .push(text("Next 12 Hours")),
-                )
-                .on_press(Message::ToggleHourly)
-                .width(cosmic::iced::Length::Fill),
-            );
+            // Tab content
+            match self.active_tab {
+                PopupTab::AirQuality => {
+                    if let Some(ref aq) = self.air_quality {
+                        let label = aqi_standard_label(aq.standard);
+                        let description = aqi_to_description(aq.aqi, aq.standard);
 
-            if self.hourly_expanded {
-                for hour in &weather.hourly {
-                    column = column.push(
-                        widget::row()
-                            .spacing(10)
-                            .push(text(format_hour(&hour.time)).width(70))
-                            .push(
-                                widget::icon::from_name(weathercode_to_icon_name(
-                                    hour.weathercode,
-                                    false,
-                                ))
-                                .size(16)
-                                .symbolic(true),
-                            )
-                            .push(
-                                text(format!(
-                                    "{:.0}{}",
-                                    hour.temperature,
-                                    self.config.temperature_unit.symbol()
-                                ))
-                                .width(45),
-                            )
-                            .push(text(format!("{}%", hour.precipitation_probability)).width(35)),
-                    );
-                }
-            }
+                        column = column.push(
+                            widget::row()
+                                .spacing(20)
+                                .push(text(format!("{}: {}", label, aq.aqi)).size(16))
+                                .push(text(description).size(14)),
+                        );
 
-            column = column.push(widget::divider::horizontal::default());
+                        column = column.push(
+                            widget::row()
+                                .spacing(20)
+                                .push(text(format!("PM2.5: {:.1} ug/m3", aq.pm2_5)).size(14))
+                                .push(text(format!("PM10: {:.1} ug/m3", aq.pm10)).size(14)),
+                        );
 
-            // 7-day forecast with collapsible header
-            let forecast_icon = if self.forecast_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(
-                            widget::icon::from_name(forecast_icon)
-                                .size(16)
-                                .symbolic(true),
-                        )
-                        .push(text("7-Day Forecast")),
-                )
-                .on_press(Message::ToggleForecast)
-                .width(cosmic::iced::Length::Fill),
-            );
+                        column = column.push(
+                            widget::row()
+                                .spacing(20)
+                                .push(text(format!("Ozone: {:.1} ug/m3", aq.ozone)).size(14))
+                                .push(
+                                    text(format!("NO2: {:.1} ug/m3", aq.nitrogen_dioxide)).size(14),
+                                ),
+                        );
 
-            if self.forecast_expanded {
-                for day in &weather.forecast {
-                    column = column.push(
-                        widget::row()
-                            .spacing(10)
-                            .push(text(format_date(&day.date)).width(90))
-                            .push(
-                                widget::icon::from_name(weathercode_to_icon_name(
-                                    day.weathercode,
-                                    false,
-                                ))
-                                .size(16)
-                                .symbolic(true),
-                            )
-                            .push(text(format!("{:.0}°", day.temp_max)).width(35))
-                            .push(text(format!("{:.0}°", day.temp_min)).width(35))
-                            .push(text(weathercode_to_description(day.weathercode))),
-                    );
-                }
-            }
-
-            column = column.push(widget::divider::horizontal::default());
-
-            // Settings section with collapsible header
-            let settings_icon = if self.settings_expanded {
-                "go-down-symbolic"
-            } else {
-                "go-next-symbolic"
-            };
-            column = column.push(
-                widget::button::custom(
-                    widget::row()
-                        .spacing(8)
-                        .push(
-                            widget::icon::from_name(settings_icon)
-                                .size(16)
-                                .symbolic(true),
-                        )
-                        .push(text("Settings")),
-                )
-                .on_press(Message::ToggleSettings)
-                .width(cosmic::iced::Length::Fill),
-            );
-
-            if self.settings_expanded {
-                column = column.push(settings::item(
-                    "Temperature Unit",
-                    widget::button::standard(self.config.temperature_unit.as_str())
-                        .on_press(Message::ToggleTemperatureUnit),
-                ));
-
-                column = column.push(settings::item(
-                    "Auto-detect Location",
-                    widget::row()
-                        .spacing(10)
-                        .push(
-                            widget::toggler(self.config.use_auto_location)
-                                .on_toggle(|_| Message::ToggleAutoLocation),
-                        )
-                        .push(
-                            widget::button::standard("Detect Now")
-                                .on_press(Message::DetectLocation),
-                        ),
-                ));
-
-                column = column.push(settings::item(
-                    "Current Location",
-                    text(&self.config.location_name),
-                ));
-
-                if !self.config.use_auto_location {
-                    column = column.push(text("Search Location").size(14));
-                    column = column.push(
-                        widget::row()
-                            .spacing(10)
-                            .padding([0, 20])
-                            .push(
-                                widget::text_input("Enter city name...", &self.city_input)
-                                    .on_input(Message::UpdateCityInput)
-                                    .on_submit(|_| Message::SearchCity)
-                                    .width(cosmic::iced::Length::Fill),
-                            )
-                            .push(widget::button::standard("Search").on_press(Message::SearchCity)),
-                    );
-
-                    if !self.search_results.is_empty() {
-                        for (idx, result) in self.search_results.iter().enumerate() {
-                            column = column.push(
-                                widget::button::text(&result.display_name)
-                                    .on_press(Message::SelectLocation(idx))
-                                    .padding(8)
-                                    .width(cosmic::iced::Length::Fill),
-                            );
-                        }
+                        column =
+                            column.push(text(format!("CO: {:.1} ug/m3", aq.carbon_monoxide)).size(14));
+                    } else {
+                        column = column.push(text("Air quality data unavailable").size(14));
                     }
                 }
+                PopupTab::Hourly => {
+                    for hour in &weather.hourly {
+                        column = column.push(
+                            widget::row()
+                                .spacing(10)
+                                .push(text(format_hour(&hour.time)).width(70))
+                                .push(
+                                    widget::icon::from_name(weathercode_to_icon_name(
+                                        hour.weathercode,
+                                        false,
+                                    ))
+                                    .size(16)
+                                    .symbolic(true),
+                                )
+                                .push(
+                                    text(format!(
+                                        "{:.0}{}",
+                                        hour.temperature,
+                                        self.config.temperature_unit.symbol()
+                                    ))
+                                    .width(45),
+                                )
+                                .push(
+                                    text(format!("{}%", hour.precipitation_probability)).width(35),
+                                ),
+                        );
+                    }
+                }
+                PopupTab::Forecast => {
+                    for day in &weather.forecast {
+                        column = column.push(
+                            widget::row()
+                                .spacing(10)
+                                .push(text(format_date(&day.date)).width(90))
+                                .push(
+                                    widget::icon::from_name(weathercode_to_icon_name(
+                                        day.weathercode,
+                                        false,
+                                    ))
+                                    .size(16)
+                                    .symbolic(true),
+                                )
+                                .push(text(format!("{:.0}", day.temp_max)).width(35))
+                                .push(text(format!("{:.0}", day.temp_min)).width(35))
+                                .push(text(weathercode_to_description(day.weathercode))),
+                        );
+                    }
+                }
+                PopupTab::Settings => {
+                    column = column.push(settings::item(
+                        "Temperature Unit",
+                        widget::button::standard(self.config.temperature_unit.as_str())
+                            .on_press(Message::ToggleTemperatureUnit),
+                    ));
 
-                column = column.push(settings::item(
-                    "Refresh Interval (minutes)",
-                    widget::text_input("Minutes", &self.refresh_input)
-                        .on_input(Message::UpdateRefreshInterval),
-                ));
+                    column = column.push(settings::item(
+                        "Auto-detect Location",
+                        widget::row()
+                            .spacing(10)
+                            .push(
+                                widget::toggler(self.config.use_auto_location)
+                                    .on_toggle(|_| Message::ToggleAutoLocation),
+                            )
+                            .push(
+                                widget::button::standard("Detect Now")
+                                    .on_press(Message::DetectLocation),
+                            ),
+                    ));
 
-                column = column.push(widget::divider::horizontal::default());
+                    column = column.push(settings::item(
+                        "Current Location",
+                        text(&self.config.location_name),
+                    ));
 
-                // Version and support info
-                column = column.push(settings::item("Version", text(VERSION)));
+                    if !self.config.use_auto_location {
+                        column = column.push(text("Search Location").size(14));
+                        column = column.push(
+                            widget::row()
+                                .spacing(10)
+                                .padding([0, 20])
+                                .push(
+                                    widget::text_input("Enter city name...", &self.city_input)
+                                        .on_input(Message::UpdateCityInput)
+                                        .on_submit(|_| Message::SearchCity)
+                                        .width(cosmic::iced::Length::Fill),
+                                )
+                                .push(
+                                    widget::button::standard("Search")
+                                        .on_press(Message::SearchCity),
+                                ),
+                        );
 
-                column = column.push(settings::item(
-                    "Support Development",
-                    widget::button::text("Tip me on Ko-fi").on_press(Message::OpenUrl(
-                        "https://ko-fi.com/vintagetechie".to_string(),
-                    )),
-                ));
+                        if !self.search_results.is_empty() {
+                            for (idx, result) in self.search_results.iter().enumerate() {
+                                column = column.push(
+                                    widget::button::text(&result.display_name)
+                                        .on_press(Message::SelectLocation(idx))
+                                        .padding(8)
+                                        .width(cosmic::iced::Length::Fill),
+                                );
+                            }
+                        }
+                    }
+
+                    column = column.push(settings::item(
+                        "Refresh Interval (minutes)",
+                        widget::text_input("Minutes", &self.refresh_input)
+                            .on_input(Message::UpdateRefreshInterval),
+                    ));
+
+                    column = column.push(widget::divider::horizontal::default());
+
+                    // Version and support info
+                    column = column.push(settings::item("Version", text(VERSION)));
+
+                    column = column.push(settings::item(
+                        "Support Development",
+                        widget::button::text("Tip me on Ko-fi").on_press(Message::OpenUrl(
+                            "https://ko-fi.com/vintagetechie".to_string(),
+                        )),
+                    ));
+                }
             }
         }
 
@@ -862,17 +806,10 @@ impl Application for Tempest {
                     eprintln!("Failed to detect location: {}", e);
                 }
             },
-            Message::ToggleHourly => {
-                self.hourly_expanded = !self.hourly_expanded;
-            }
-            Message::ToggleForecast => {
-                self.forecast_expanded = !self.forecast_expanded;
-            }
-            Message::ToggleSettings => {
-                self.settings_expanded = !self.settings_expanded;
-            }
-            Message::ToggleAirQuality => {
-                self.air_quality_expanded = !self.air_quality_expanded;
+            Message::SelectTab(tab) => {
+                self.active_tab = tab;
+                self.config.default_tab = tab;
+                self.save_config();
             }
             Message::OpenUrl(url) => {
                 if let Err(e) = open::that(&url) {
