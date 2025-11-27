@@ -26,13 +26,6 @@ impl TemperatureUnit {
         }
     }
 
-    pub fn convert_from_celsius(&self, celsius: f32) -> f32 {
-        match self {
-            Self::Celsius => celsius,
-            Self::Fahrenheit => celsius * 9.0 / 5.0 + 32.0,
-        }
-    }
-
     pub fn api_param(&self) -> &'static str {
         match self {
             Self::Fahrenheit => "fahrenheit",

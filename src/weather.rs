@@ -44,7 +44,6 @@ pub struct WeatherData {
     pub current: CurrentWeather,
     pub hourly: Vec<HourlyForecast>,
     pub forecast: Vec<DailyForecast>,
-    pub last_updated: chrono::DateTime<chrono::Utc>,
 }
 
 /// AQI standard based on region
@@ -162,7 +161,6 @@ pub async fn fetch_weather(
         },
         hourly,
         forecast,
-        last_updated: chrono::Utc::now(),
     })
 }
 
@@ -340,7 +338,7 @@ pub fn weathercode_to_description(code: i32) -> &'static str {
         61 | 63 | 65 => "Rain",
         71 | 73 | 75 => "Snow",
         77 => "Snow grains",
-        80 | 81 | 82 => "Rain showers",
+        80..=82 => "Rain showers",
         85 | 86 => "Snow showers",
         95 => "Thunderstorm",
         96 | 99 => "Thunderstorm with hail",
@@ -477,7 +475,7 @@ pub fn weathercode_to_icon_name(code: i32, is_night: bool) -> &'static str {
         // Snow grains
         77 => "weather-snow",
         // Rain showers: Slight, moderate, and violent
-        80 | 81 | 82 => "weather-showers",
+        80..=82 => "weather-showers",
         // Snow showers slight and heavy
         85 | 86 => "weather-snow",
         // Thunderstorm

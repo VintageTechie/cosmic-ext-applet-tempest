@@ -11,7 +11,7 @@ use std::sync::LazyLock;
 
 /// Applies the requested language(s) to requested translations from the `fl!()` macro.
 pub fn init(requested_languages: &[LanguageIdentifier]) {
-    if let Err(why) = localizer().select(&requested_languages) {
+    if let Err(why) = localizer().select(requested_languages) {
         eprintln!("error while loading fluent localizations: {why}");
     }
 }

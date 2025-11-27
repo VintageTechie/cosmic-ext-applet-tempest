@@ -799,7 +799,7 @@ impl Application for Tempest {
             Message::UpdateRefreshInterval(value) => {
                 self.refresh_input = value.clone();
                 if let Ok(interval) = value.parse::<u64>() {
-                    if interval >= 1 && interval <= 1440 {
+                    if (1..=1440).contains(&interval) {
                         self.config.refresh_interval_minutes = interval;
                         self.save_config();
                     }
