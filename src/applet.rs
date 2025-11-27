@@ -13,7 +13,7 @@ use std::time::Duration;
 use crate::config::{Config, MeasurementSystem, TemperatureUnit};
 use crate::weather::{
     aqi_standard_label, aqi_to_description, detect_location, fetch_air_quality, fetch_weather,
-    format_date, format_hour, format_time, search_city, weathercode_to_description,
+    format_date, format_hour, format_time, is_night_time, search_city, weathercode_to_description,
     weathercode_to_icon_name, wind_direction_to_compass, AirQualityData, AqiStandard,
     LocationResult, WeatherData,
 };
@@ -205,8 +205,17 @@ impl Application for Tempest {
         use chrono::{Local, Timelike};
         use cosmic::iced::Alignment;
 
-        // Determine if it's night time (6pm to 6am)
-        let is_night = matches!(Local::now().hour(), 18..24 | 0..6);
+        // Determine if it's night time using actual sunrise/sunset data
+        let is_night = self
+            .weather_data
+            .as_ref()
+            .and_then(|w| w.forecast.first())
+            .map(|day| is_night_time(&day.sunrise, &day.sunset))
+            .unwrap_or_else(|| {
+                // Fallback to 6pm-6am if no weather data available
+                let hour = Local::now().hour();
+                !(6..18).contains(&hour)
+            });
 
         // Use error icon if there's an error, otherwise use weather icon
         let icon_name = if self.error_message.is_some() {

@@ -410,6 +410,34 @@ pub fn format_time(time_str: &str) -> String {
     }
 }
 
+/// Determines if current time is night (before sunrise or after sunset).
+/// Falls back to 6pm-6am if parsing fails.
+pub fn is_night_time(sunrise: &str, sunset: &str) -> bool {
+    use chrono::{Local, NaiveDateTime, TimeZone, Timelike};
+
+    let now = Local::now();
+
+    // Parse sunrise/sunset times (format: "2025-01-20T06:30")
+    let parse_time = |time_str: &str| -> Option<chrono::DateTime<Local>> {
+        // Try parsing with seconds first, then without
+        NaiveDateTime::parse_from_str(time_str, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| NaiveDateTime::parse_from_str(time_str, "%Y-%m-%dT%H:%M"))
+            .ok()
+            .and_then(|naive| Local.from_local_datetime(&naive).single())
+    };
+
+    match (parse_time(sunrise), parse_time(sunset)) {
+        (Some(sunrise_time), Some(sunset_time)) => {
+            now < sunrise_time || now > sunset_time
+        }
+        _ => {
+            // Fallback to hardcoded 6am-6pm if parsing fails
+            let hour = now.hour();
+            !(6..18).contains(&hour)
+        }
+    }
+}
+
 /// Formats date string to readable format (e.g., "2025-11-25" -> "Tue Nov 25")
 pub fn format_date(date_str: &str) -> String {
     if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
