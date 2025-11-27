@@ -34,6 +34,16 @@ impl TemperatureUnit {
     }
 }
 
+/// Tab options for the popup interface.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PopupTab {
+    #[default]
+    AirQuality,
+    Hourly,
+    Forecast,
+    Settings,
+}
+
 /// Measurement system for non-temperature units (wind speed, visibility, etc.)
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MeasurementSystem {
@@ -100,6 +110,8 @@ pub struct Config {
     pub manual_longitude: Option<f64>,
     pub manual_location_name: Option<String>,
     pub last_updated: Option<i64>,
+    /// Last selected tab, restored on popup open.
+    pub default_tab: PopupTab,
 }
 
 impl Default for Config {
@@ -116,6 +128,7 @@ impl Default for Config {
             manual_longitude: None,
             manual_location_name: None,
             last_updated: None,
+            default_tab: PopupTab::default(),
         }
     }
 }
