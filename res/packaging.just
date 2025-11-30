@@ -2,7 +2,8 @@ rootdir := ''
 prefix := '/usr'
 base-dir := absolute_path(clean(rootdir / prefix))
 
-bin-src := 'target' / 'release' / name
+target-dir := `cargo metadata --format-version 1 | jq -r '.target_directory'`
+bin-src := target-dir / 'release' / name
 bin-path := 'bin' / name
 bin-dst := base-dir / bin-path
 
