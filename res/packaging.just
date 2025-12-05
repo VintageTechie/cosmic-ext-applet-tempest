@@ -52,6 +52,13 @@ uninstall:
     rm {{metainfo-dst}}
     rm {{icons-dst}}
 
+# Uninstalls with sudo (mirrors install-dev)
+uninstall-dev:
+    sudo rm {{bin-dst}}
+    sudo rm {{desktop-dst}}
+    sudo rm {{metainfo-dst}}
+    sudo rm {{icons-dst}}
+
 
 # Installs files locally
 [no-cd]

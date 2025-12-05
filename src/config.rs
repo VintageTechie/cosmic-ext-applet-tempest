@@ -39,6 +39,7 @@ impl TemperatureUnit {
 pub enum PopupTab {
     #[default]
     AirQuality,
+    Alerts,
     Hourly,
     Forecast,
     Settings,
@@ -95,7 +96,7 @@ impl MeasurementSystem {
     }
 }
 
-#[derive(Debug, Clone, CosmicConfigEntry, PartialEq)]
+#[derive(Debug, Clone, CosmicConfigEntry, PartialEq, Serialize, Deserialize)]
 #[version = 1]
 pub struct Config {
     pub latitude: f64,
@@ -112,6 +113,13 @@ pub struct Config {
     pub last_updated: Option<i64>,
     /// Last selected tab, restored on popup open.
     pub default_tab: PopupTab,
+    /// Enable weather alerts (US only via NWS).
+    #[serde(default = "default_alerts_enabled")]
+    pub alerts_enabled: bool,
+}
+
+fn default_alerts_enabled() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -129,6 +137,7 @@ impl Default for Config {
             manual_location_name: None,
             last_updated: None,
             default_tab: PopupTab::default(),
+            alerts_enabled: true,
         }
     }
 }

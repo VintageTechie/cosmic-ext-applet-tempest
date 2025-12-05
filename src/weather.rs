@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Current weather conditions
@@ -63,6 +64,70 @@ pub struct AirQualityData {
     pub ozone: f32,
     pub nitrogen_dioxide: f32,
     pub carbon_monoxide: f32,
+}
+
+/// Weather alert severity levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlertSeverity {
+    Minor,
+    Moderate,
+    Severe,
+    Extreme,
+    Unknown,
+}
+
+impl AlertSeverity {
+    /// Parses NWS severity string into enum variant.
+    fn from_nws_string(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "minor" => Self::Minor,
+            "moderate" => Self::Moderate,
+            "severe" => Self::Severe,
+            "extreme" => Self::Extreme,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Weather alert from NWS or other sources
+#[derive(Debug, Clone)]
+pub struct Alert {
+    pub id: String,
+    pub event: String,
+    pub severity: AlertSeverity,
+    pub urgency: String,
+    pub headline: String,
+    pub description: String,
+    pub instruction: Option<String>,
+    pub area_desc: String,
+    pub sent: DateTime<Utc>,
+    pub expires: DateTime<Utc>,
+}
+
+/// NWS API GeoJSON response structure
+#[derive(Debug, Deserialize)]
+struct NwsAlertsResponse {
+    features: Vec<NwsAlertFeature>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NwsAlertFeature {
+    properties: NwsAlertProperties,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NwsAlertProperties {
+    id: String,
+    event: String,
+    severity: Option<String>,
+    urgency: Option<String>,
+    headline: Option<String>,
+    description: Option<String>,
+    instruction: Option<String>,
+    area_desc: String,
+    sent: String,
+    expires: Option<String>,
 }
 
 /// Open-Meteo API response structure
@@ -324,6 +389,96 @@ pub async fn detect_location() -> Result<(f64, f64, String), Box<dyn std::error:
     }
 
     Err("Failed to detect location from IP address".into())
+}
+
+/// Checks if coordinates fall within US territory (continental US, Alaska, Hawaii).
+fn is_us_coordinates(lat: f64, lon: f64) -> bool {
+    // Continental US: lat 24-49, lon -125 to -66
+    let continental = (24.0..=49.0).contains(&lat) && (-125.0..=-66.0).contains(&lon);
+    // Alaska: lat 51-72, lon -180 to -129
+    let alaska = (51.0..=72.0).contains(&lat) && (-180.0..=-129.0).contains(&lon);
+    // Hawaii: lat 18-23, lon -161 to -154
+    let hawaii = (18.0..=23.0).contains(&lat) && (-161.0..=-154.0).contains(&lon);
+
+    continental || alaska || hawaii
+}
+
+/// Fetches active weather alerts from the NWS API.
+/// Returns an empty vector for non-US coordinates.
+pub async fn fetch_alerts(
+    latitude: f64,
+    longitude: f64,
+) -> Result<Vec<Alert>, Box<dyn std::error::Error + Send + Sync>> {
+    if !is_us_coordinates(latitude, longitude) {
+        return Ok(vec![]);
+    }
+
+    let url = format!(
+        "https://api.weather.gov/alerts/active?point={},{}",
+        latitude, longitude
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            "(cosmic-ext-applet-tempest, https://github.com/VintageTechie/cosmic-ext-applet-tempest)",
+        )
+        .header("Accept", "application/geo+json")
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(format!("NWS API returned status: {}", response.status()).into());
+    }
+
+    let data: NwsAlertsResponse = response.json().await?;
+
+    let alerts: Vec<Alert> = data
+        .features
+        .into_iter()
+        .filter_map(|feature| {
+            let props = feature.properties;
+
+            // Parse timestamps
+            let sent = DateTime::parse_from_rfc3339(&props.sent)
+                .ok()?
+                .with_timezone(&Utc);
+
+            let expires = props
+                .expires
+                .as_ref()
+                .and_then(|e| DateTime::parse_from_rfc3339(e).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|| sent + chrono::Duration::hours(24));
+
+            // Skip expired alerts
+            if expires < Utc::now() {
+                return None;
+            }
+
+            Some(Alert {
+                id: props.id,
+                event: props.event,
+                severity: props
+                    .severity
+                    .as_deref()
+                    .map(AlertSeverity::from_nws_string)
+                    .unwrap_or(AlertSeverity::Unknown),
+                urgency: props.urgency.unwrap_or_else(|| "Unknown".to_string()),
+                headline: props.headline.unwrap_or_default(),
+                description: props.description.unwrap_or_default(),
+                instruction: props.instruction,
+                area_desc: props.area_desc,
+                sent,
+                expires,
+            })
+        })
+        .collect();
+
+    eprintln!("Fetched {} active alert(s) from NWS", alerts.len());
+    Ok(alerts)
 }
 
 /// Converts WMO weather codes to human-readable descriptions

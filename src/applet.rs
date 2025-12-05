@@ -8,14 +8,15 @@ use cosmic::iced::{Limits, Subscription};
 use cosmic::iced_futures::Subscription as IcedSubscription;
 use cosmic::widget::{self, settings, text};
 use cosmic::{Action, Application, Element};
+use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::config::{Config, MeasurementSystem, PopupTab, TemperatureUnit};
 use crate::weather::{
-    aqi_standard_label, aqi_to_description, detect_location, fetch_air_quality, fetch_weather,
-    format_date, format_hour, format_time, is_night_time, search_city, weathercode_to_description,
-    weathercode_to_icon_name, wind_direction_to_compass, AirQualityData, AqiStandard,
-    LocationResult, WeatherData,
+    aqi_standard_label, aqi_to_description, detect_location, fetch_air_quality, fetch_alerts,
+    fetch_weather, format_date, format_hour, format_time, is_night_time, search_city,
+    weathercode_to_description, weathercode_to_icon_name, wind_direction_to_compass,
+    AirQualityData, Alert, AlertSeverity, AqiStandard, LocationResult, WeatherData,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -31,6 +32,10 @@ pub struct Tempest {
     weather_data: Option<WeatherData>,
     /// Air quality data.
     air_quality: Option<AirQualityData>,
+    /// Active weather alerts.
+    alerts: Vec<Alert>,
+    /// IDs of alerts already shown as notifications (prevents duplicates).
+    seen_alert_ids: HashSet<String>,
     /// Configuration
     config: Config,
     /// Config handler for persistence
@@ -62,6 +67,8 @@ impl Default for Tempest {
             popup: None,
             weather_data: None,
             air_quality: None,
+            alerts: Vec::new(),
+            seen_alert_ids: HashSet::new(),
             city_input: String::new(),
             refresh_input: config.refresh_interval_minutes.to_string(),
             search_results: Vec::new(),
@@ -85,8 +92,10 @@ pub enum Message {
     RefreshWeather,
     WeatherUpdated(Result<WeatherData, String>),
     AirQualityUpdated(Result<AirQualityData, String>),
+    AlertsUpdated(Result<Vec<Alert>, String>),
     Tick,
     ToggleTemperatureUnit,
+    ToggleAlertsEnabled,
     UpdateCityInput(String),
     SearchCity,
     CitySearchResult(Result<Vec<LocationResult>, String>),
@@ -219,12 +228,20 @@ impl Application for Tempest {
 
         let temperature_text = text(&self.display_label);
 
+        let has_alerts = !self.alerts.is_empty();
+        let alert_icon = widget::icon::from_name("weather-severe-alert-symbolic")
+            .size(14)
+            .symbolic(true);
+
         let data = if self.core.applet.is_horizontal() {
             let mut row = widget::row()
                 .push(icon)
                 .push(temperature_text)
                 .align_y(Alignment::Center)
                 .spacing(4);
+            if has_alerts {
+                row = row.push(alert_icon);
+            }
             if let Some((aqi, _)) = self.current_aqi {
                 row = row.push(text("|").size(12));
                 row = row.push(text(format!("AQI {}", aqi)));
@@ -236,6 +253,9 @@ impl Application for Tempest {
                 .push(temperature_text)
                 .align_x(Alignment::Center)
                 .spacing(4);
+            if has_alerts {
+                col = col.push(alert_icon);
+            }
             if let Some((aqi, _)) = self.current_aqi {
                 col = col.push(text(format!("AQI {}", aqi)).size(12));
             }
@@ -250,7 +270,10 @@ impl Application for Tempest {
     }
 
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
-        let mut column = widget::column().spacing(10).padding(10).max_width(500);
+        let mut column = widget::column()
+            .spacing(10)
+            .padding(10)
+            .width(cosmic::iced::Length::Fixed(420.0));
 
         // Add header with location name and refresh button
         let header = widget::row()
@@ -398,35 +421,27 @@ impl Application for Tempest {
             column = column.push(widget::divider::horizontal::default());
 
             // Tab bar
+            let active = self.active_tab;
             let air_btn = widget::button::text("Air").on_press(Message::SelectTab(PopupTab::AirQuality));
+            let alerts_btn = widget::button::text("Alerts").on_press(Message::SelectTab(PopupTab::Alerts));
             let hourly_btn = widget::button::text("Hourly").on_press(Message::SelectTab(PopupTab::Hourly));
             let forecast_btn = widget::button::text("7-Day").on_press(Message::SelectTab(PopupTab::Forecast));
             let settings_btn = widget::button::text("Settings").on_press(Message::SelectTab(PopupTab::Settings));
 
             let tab_bar = widget::row()
-                .spacing(4)
-                .push(if self.active_tab == PopupTab::AirQuality {
-                    air_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    air_btn
-                })
-                .push(if self.active_tab == PopupTab::Hourly {
-                    hourly_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    hourly_btn
-                })
-                .push(if self.active_tab == PopupTab::Forecast {
-                    forecast_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    forecast_btn
-                })
-                .push(if self.active_tab == PopupTab::Settings {
-                    settings_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    settings_btn
-                });
+                .spacing(8)
+                .align_y(cosmic::iced::Alignment::Center)
+                .push(if active == PopupTab::AirQuality { air_btn.class(cosmic::theme::Button::Suggested) } else { air_btn })
+                .push(if active == PopupTab::Alerts { alerts_btn.class(cosmic::theme::Button::Suggested) } else { alerts_btn })
+                .push(if active == PopupTab::Hourly { hourly_btn.class(cosmic::theme::Button::Suggested) } else { hourly_btn })
+                .push(if active == PopupTab::Forecast { forecast_btn.class(cosmic::theme::Button::Suggested) } else { forecast_btn })
+                .push(if active == PopupTab::Settings { settings_btn.class(cosmic::theme::Button::Suggested) } else { settings_btn });
 
-            column = column.push(tab_bar);
+            column = column.push(
+                widget::container(tab_bar)
+                    .align_x(cosmic::iced::alignment::Horizontal::Center)
+                    .width(cosmic::iced::Length::Fill),
+            );
             column = column.push(widget::divider::horizontal::default());
 
             // Tab content
@@ -465,12 +480,82 @@ impl Application for Tempest {
                         column = column.push(text("Air quality data unavailable").size(14));
                     }
                 }
+                PopupTab::Alerts => {
+                    if !self.config.alerts_enabled {
+                        column = column.push(
+                            widget::container(
+                                widget::column()
+                                    .spacing(10)
+                                    .align_x(cosmic::iced::alignment::Horizontal::Center)
+                                    .push(text("Weather alerts are disabled").size(14))
+                                    .push(text("Enable them in Settings").size(12)),
+                            )
+                            .align_x(cosmic::iced::alignment::Horizontal::Center)
+                            .width(cosmic::iced::Length::Fill),
+                        );
+                    } else if self.alerts.is_empty() {
+                        column = column.push(
+                            widget::container(
+                                widget::column()
+                                    .spacing(10)
+                                    .align_x(cosmic::iced::alignment::Horizontal::Center)
+                                    .push(
+                                        widget::icon::from_name("weather-clear-symbolic")
+                                            .size(48)
+                                            .symbolic(true),
+                                    )
+                                    .push(text("No active alerts").size(16))
+                                    .push(text("Your area is clear").size(12)),
+                            )
+                            .align_x(cosmic::iced::alignment::Horizontal::Center)
+                            .width(cosmic::iced::Length::Fill),
+                        );
+                    } else {
+                        for alert in &self.alerts {
+                            let severity_icon = match alert.severity {
+                                AlertSeverity::Extreme => "dialog-error-symbolic",
+                                AlertSeverity::Severe => "dialog-warning-symbolic",
+                                AlertSeverity::Moderate => "dialog-information-symbolic",
+                                _ => "weather-severe-alert-symbolic",
+                            };
+
+                            column = column.push(
+                                widget::container(
+                                    widget::column()
+                                        .spacing(4)
+                                        .push(
+                                            widget::row()
+                                                .spacing(8)
+                                                .push(
+                                                    widget::icon::from_name(severity_icon)
+                                                        .size(20)
+                                                        .symbolic(true),
+                                                )
+                                                .push(text(&alert.event).size(14)),
+                                        )
+                                        .push(text(&alert.headline).size(12))
+                                        .push(
+                                            text(format!(
+                                                "Expires: {}",
+                                                alert.expires.format("%b %d %I:%M %p")
+                                            ))
+                                            .size(10),
+                                        ),
+                                )
+                                .padding(8)
+                                .width(cosmic::iced::Length::Fill),
+                            );
+                            column = column.push(widget::divider::horizontal::default());
+                        }
+                    }
+                }
                 PopupTab::Hourly => {
                     for hour in &weather.hourly {
                         column = column.push(
-                            widget::row()
-                                .spacing(10)
-                                .push(text(format_hour(&hour.time)).width(70))
+                            widget::container(
+                                widget::row()
+                                    .spacing(10)
+                                    .push(text(format_hour(&hour.time)).width(100))
                                 .push(
                                     widget::icon::from_name(weathercode_to_icon_name(
                                         hour.weathercode,
@@ -485,11 +570,14 @@ impl Application for Tempest {
                                         hour.temperature,
                                         self.config.temperature_unit.symbol()
                                     ))
-                                    .width(45),
+                                    .width(70),
                                 )
                                 .push(
-                                    text(format!("{}%", hour.precipitation_probability)).width(35),
+                                    text(format!("{}%", hour.precipitation_probability)).width(60),
                                 ),
+                            )
+                            .align_x(cosmic::iced::alignment::Horizontal::Center)
+                            .width(cosmic::iced::Length::Fill),
                         );
                     }
                 }
@@ -514,48 +602,51 @@ impl Application for Tempest {
                     }
                 }
                 PopupTab::Settings => {
+                    // Units section
                     column = column.push(settings::item(
                         "Temperature Unit",
                         widget::button::standard(self.config.temperature_unit.as_str())
                             .on_press(Message::ToggleTemperatureUnit),
                     ));
 
+                    column = column.push(widget::divider::horizontal::default());
+
+                    // Location section
                     column = column.push(settings::item(
                         "Auto-detect Location",
-                        widget::row()
-                            .spacing(10)
-                            .push(
-                                widget::toggler(self.config.use_auto_location)
-                                    .on_toggle(|_| Message::ToggleAutoLocation),
-                            )
-                            .push(
-                                widget::button::standard("Detect Now")
-                                    .on_press(Message::DetectLocation),
-                            ),
+                        widget::toggler(self.config.use_auto_location)
+                            .on_toggle(|_| Message::ToggleAutoLocation),
                     ));
+
+                    if self.config.use_auto_location {
+                        column = column.push(settings::item(
+                            "",
+                            widget::button::standard("Detect Now")
+                                .on_press(Message::DetectLocation),
+                        ));
+                    }
 
                     column = column.push(settings::item(
                         "Current Location",
-                        text(&self.config.location_name),
+                        text(&self.config.location_name).size(13),
                     ));
 
                     if !self.config.use_auto_location {
-                        column = column.push(text("Search Location").size(14));
-                        column = column.push(
+                        column = column.push(settings::item(
+                            "Search Location",
                             widget::row()
-                                .spacing(10)
-                                .padding([0, 20])
+                                .spacing(8)
                                 .push(
                                     widget::text_input("Enter city name...", &self.city_input)
                                         .on_input(Message::UpdateCityInput)
                                         .on_submit(|_| Message::SearchCity)
-                                        .width(cosmic::iced::Length::Fill),
+                                        .width(cosmic::iced::Length::Fixed(180.0)),
                                 )
                                 .push(
                                     widget::button::standard("Search")
                                         .on_press(Message::SearchCity),
                                 ),
-                        );
+                        ));
 
                         if !self.search_results.is_empty() {
                             for (idx, result) in self.search_results.iter().enumerate() {
@@ -569,19 +660,44 @@ impl Application for Tempest {
                         }
                     }
 
+                    column = column.push(widget::divider::horizontal::default());
+
+                    // Refresh & Alerts section
                     column = column.push(settings::item(
-                        "Refresh Interval (minutes)",
-                        widget::text_input("Minutes", &self.refresh_input)
-                            .on_input(Message::UpdateRefreshInterval),
+                        "Refresh Interval",
+                        widget::row()
+                            .spacing(8)
+                            .align_y(cosmic::iced::Alignment::Center)
+                            .push(
+                                widget::text_input("15", &self.refresh_input)
+                                    .on_input(Message::UpdateRefreshInterval)
+                                    .width(cosmic::iced::Length::Fixed(60.0)),
+                            )
+                            .push(text("minutes").size(13)),
+                    ));
+
+                    column = column.push(settings::item(
+                        "Weather Alerts",
+                        widget::row()
+                            .spacing(8)
+                            .align_y(cosmic::iced::Alignment::Center)
+                            .push(
+                                widget::toggler(self.config.alerts_enabled)
+                                    .on_toggle(|_| Message::ToggleAlertsEnabled),
+                            )
+                            .push(text("US only").size(11)),
                     ));
 
                     column = column.push(widget::divider::horizontal::default());
 
-                    // Version and support info
-                    column = column.push(settings::item("Version", text(VERSION)));
+                    // About section
+                    column = column.push(settings::item(
+                        "Version",
+                        text(VERSION).size(13),
+                    ));
 
                     column = column.push(settings::item(
-                        "Support Development",
+                        "Support",
                         widget::button::text("Tip me on Ko-fi").on_press(Message::OpenUrl(
                             "https://ko-fi.com/vintagetechie".to_string(),
                         )),
@@ -592,7 +708,13 @@ impl Application for Tempest {
 
         let scrollable = widget::scrollable(column).height(cosmic::iced::Length::Fill);
 
-        self.core.applet.popup_container(scrollable).into()
+        let popup_limits = Limits::NONE
+            .min_width(480.0)
+            .max_width(480.0)
+            .min_height(200.0)
+            .max_height(800.0);
+
+        self.core.applet.popup_container(scrollable).limits(popup_limits).into()
     }
 
     /// Application messages are handled here. The application state can be modified based on
@@ -614,9 +736,9 @@ impl Application for Tempest {
                         None,
                     );
                     popup_settings.positioner.size_limits = Limits::NONE
-                        .max_width(450.0)
-                        .min_width(400.0)
-                        .min_height(600.0)
+                        .min_width(440.0)
+                        .max_width(440.0)
+                        .min_height(200.0)
                         .max_height(800.0);
                     get_popup(popup_settings)
                 }
@@ -638,6 +760,7 @@ impl Application for Tempest {
                     .measurement_system
                     .wind_speed_api_param()
                     .to_string();
+                let alerts_enabled = self.config.alerts_enabled;
 
                 // Fetch weather and air quality in parallel
                 let weather_task = Task::perform(
@@ -654,7 +777,17 @@ impl Application for Tempest {
                     |result| Action::App(Message::AirQualityUpdated(result)),
                 );
 
-                return Task::batch([weather_task, air_quality_task]);
+                // Fetch alerts if enabled
+                let alerts_task = if alerts_enabled {
+                    Task::perform(
+                        async move { fetch_alerts(lat, lon).await.map_err(|e| e.to_string()) },
+                        |result| Action::App(Message::AlertsUpdated(result)),
+                    )
+                } else {
+                    Task::none()
+                };
+
+                return Task::batch([weather_task, air_quality_task, alerts_task]);
             }
             Message::WeatherUpdated(result) => {
                 self.is_loading = false;
@@ -694,6 +827,21 @@ impl Application for Tempest {
                     self.air_quality = None;
                 }
             },
+            Message::AlertsUpdated(result) => match result {
+                Ok(new_alerts) => {
+                    // Send notifications for new alerts
+                    for alert in &new_alerts {
+                        if !self.seen_alert_ids.contains(&alert.id) {
+                            self.send_alert_notification(alert);
+                            self.seen_alert_ids.insert(alert.id.clone());
+                        }
+                    }
+                    self.alerts = new_alerts;
+                }
+                Err(e) => {
+                    eprintln!("Failed to fetch alerts: {}", e);
+                }
+            },
             Message::Tick => {
                 return Task::perform(async { Message::RefreshWeather }, Action::App);
             }
@@ -709,6 +857,14 @@ impl Application for Tempest {
                         self.config.measurement_system = MeasurementSystem::Imperial;
                     }
                 };
+                self.save_config();
+                return Task::perform(async { Message::RefreshWeather }, Action::App);
+            }
+            Message::ToggleAlertsEnabled => {
+                self.config.alerts_enabled = !self.config.alerts_enabled;
+                if !self.config.alerts_enabled {
+                    self.alerts.clear();
+                }
                 self.save_config();
                 return Task::perform(async { Message::RefreshWeather }, Action::App);
             }
@@ -831,6 +987,27 @@ impl Tempest {
             if let Err(e) = self.config.write_entry(handler) {
                 eprintln!("Failed to save config: {}", e);
             }
+        }
+    }
+
+    /// Sends a desktop notification for a weather alert.
+    fn send_alert_notification(&self, alert: &Alert) {
+        use notify_rust::{Notification, Urgency};
+
+        let urgency = match alert.severity {
+            AlertSeverity::Extreme | AlertSeverity::Severe => Urgency::Critical,
+            AlertSeverity::Moderate => Urgency::Normal,
+            _ => Urgency::Low,
+        };
+
+        if let Err(e) = Notification::new()
+            .summary(&alert.event)
+            .body(&alert.headline)
+            .icon("weather-severe-alert")
+            .urgency(urgency)
+            .show()
+        {
+            eprintln!("Failed to send alert notification: {}", e);
         }
     }
 }
