@@ -87,10 +87,23 @@ impl AlertSeverity {
             _ => Self::Unknown,
         }
     }
+
+    /// Parses MeteoAlarm severity string into enum variant.
+    fn from_meteoalarm_string(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "minor" => Self::Minor,
+            "moderate" => Self::Moderate,
+            "severe" | "major" => Self::Severe,
+            "extreme" => Self::Extreme,
+            _ => Self::Unknown,
+        }
+    }
 }
 
-/// Weather alert from NWS or other sources
+/// Weather alert from NWS or other sources.
+/// Some fields are included for potential future UI enhancements.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Alert {
     pub id: String,
     pub event: String,
@@ -128,6 +141,77 @@ struct NwsAlertProperties {
     area_desc: String,
     sent: String,
     expires: Option<String>,
+}
+
+/// MeteoAlarm Atom feed response structure
+#[derive(Debug, Deserialize)]
+struct MeteoAlarmFeed {
+    #[serde(rename = "entry", default)]
+    entries: Vec<MeteoAlarmEntry>,
+}
+
+/// Single alert entry from MeteoAlarm Atom feed
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct MeteoAlarmEntry {
+    id: String,
+    title: Option<String>,
+    #[serde(rename = "identifier")]
+    cap_identifier: Option<String>,
+    #[serde(rename = "event")]
+    cap_event: Option<String>,
+    #[serde(rename = "severity")]
+    cap_severity: Option<String>,
+    #[serde(rename = "urgency")]
+    cap_urgency: Option<String>,
+    #[serde(rename = "areaDesc")]
+    cap_area_desc: Option<String>,
+    #[serde(rename = "sent")]
+    cap_sent: Option<String>,
+    #[serde(rename = "expires")]
+    cap_expires: Option<String>,
+    #[serde(rename = "effective")]
+    cap_effective: Option<String>,
+    /// Geocode containing EMMA_ID for region filtering
+    #[serde(rename = "geocode")]
+    cap_geocode: Option<MeteoAlarmGeocode>,
+}
+
+/// Geocode element containing EMMA_ID area identifier.
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct MeteoAlarmGeocode {
+    #[serde(rename = "valueName")]
+    value_name: Option<String>,
+    value: Option<String>,
+}
+
+/// Nominatim reverse geocoding response
+#[derive(Debug, Deserialize)]
+struct NominatimResponse {
+    address: Option<NominatimAddress>,
+}
+
+/// Address details from Nominatim.
+/// Some fields reserved for future use with other European regions.
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct NominatimAddress {
+    city: Option<String>,
+    town: Option<String>,
+    village: Option<String>,
+    municipality: Option<String>,
+    county: Option<String>,
+    state: Option<String>,
+    #[serde(rename = "ISO3166-2-lvl4")]
+    iso_state: Option<String>,
+}
+
+/// MeteoAlarm codenames mapping (EMMA_ID -> region name)
+#[derive(Debug, Deserialize)]
+#[serde(transparent)]
+struct MeteoAlarmCodenames {
+    codes: std::collections::HashMap<String, String>,
 }
 
 /// Open-Meteo API response structure
@@ -414,16 +498,122 @@ fn is_us_coordinates(lat: f64, lon: f64) -> bool {
     continental || alaska || hawaii
 }
 
-/// Fetches active weather alerts from the NWS API.
-/// Returns an empty vector for non-US coordinates.
-pub async fn fetch_alerts(
+/// Maps country name to (MeteoAlarm feed slug, ISO country code).
+/// Returns None if country is not covered by MeteoAlarm.
+fn get_meteoalarm_info(country: &str) -> Option<(&'static str, &'static str)> {
+    match country.to_lowercase().as_str() {
+        "austria" => Some(("austria", "AT")),
+        "belgium" => Some(("belgium", "BE")),
+        "bosnia and herzegovina" => Some(("bosnia-herzegovina", "BA")),
+        "bulgaria" => Some(("bulgaria", "BG")),
+        "croatia" => Some(("croatia", "HR")),
+        "cyprus" => Some(("cyprus", "CY")),
+        "czechia" | "czech republic" => Some(("czechia", "CZ")),
+        "denmark" => Some(("denmark", "DK")),
+        "estonia" => Some(("estonia", "EE")),
+        "finland" => Some(("finland", "FI")),
+        "france" => Some(("france", "FR")),
+        "germany" => Some(("germany", "DE")),
+        "greece" => Some(("greece", "GR")),
+        "hungary" => Some(("hungary", "HU")),
+        "iceland" => Some(("iceland", "IS")),
+        "ireland" => Some(("ireland", "IE")),
+        "israel" => Some(("israel", "IL")),
+        "italy" => Some(("italy", "IT")),
+        "latvia" => Some(("latvia", "LV")),
+        "lithuania" => Some(("lithuania", "LT")),
+        "luxembourg" => Some(("luxembourg", "LU")),
+        "malta" => Some(("malta", "MT")),
+        "moldova" => Some(("moldova", "MD")),
+        "montenegro" => Some(("montenegro", "ME")),
+        "netherlands" => Some(("netherlands", "NL")),
+        "north macedonia" | "macedonia" => Some(("north-macedonia", "MK")),
+        "norway" => Some(("norway", "NO")),
+        "poland" => Some(("poland", "PL")),
+        "portugal" => Some(("portugal", "PT")),
+        "romania" => Some(("romania", "RO")),
+        "serbia" => Some(("serbia", "RS")),
+        "slovakia" => Some(("slovakia", "SK")),
+        "slovenia" => Some(("slovenia", "SI")),
+        "spain" => Some(("spain", "ES")),
+        "sweden" => Some(("sweden", "SE")),
+        "switzerland" => Some(("switzerland", "CH")),
+        "united kingdom" | "uk" => Some(("united-kingdom", "UK")),
+        _ => None,
+    }
+}
+
+/// Detects country from coordinates using reverse geocoding.
+async fn detect_country_from_coords(
+    latitude: f64,
+    longitude: f64,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    // Use Open-Meteo geocoding API for reverse lookup
+    let url = format!(
+        "https://geocoding-api.open-meteo.com/v1/search?name=&latitude={}&longitude={}&count=1",
+        latitude, longitude
+    );
+
+    let response = reqwest::get(&url).await;
+    if let Ok(resp) = response {
+        if let Ok(data) = resp.json::<GeocodingResponse>().await {
+            if let Some(results) = data.results {
+                if let Some(first) = results.first() {
+                    if let Some(country) = &first.country {
+                        return Ok(country.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: use approximate country from European bounding boxes
+    let country = approximate_european_country(latitude, longitude);
+    Ok(country.to_string())
+}
+
+/// Approximates country from coordinates using bounding boxes.
+/// Used as fallback when reverse geocoding fails.
+fn approximate_european_country(lat: f64, lon: f64) -> &'static str {
+    // Major European countries by rough bounding boxes
+    if (47.3..=55.1).contains(&lat) && (5.9..=15.0).contains(&lon) {
+        "Germany"
+    } else if (41.3..=51.1).contains(&lat) && (-5.1..=9.6).contains(&lon) {
+        "France"
+    } else if (36.0..=43.8).contains(&lat) && (-9.5..=3.3).contains(&lon) {
+        "Spain"
+    } else if (36.6..=47.1).contains(&lat) && (6.6..=18.5).contains(&lon) {
+        "Italy"
+    } else if (49.9..=61.0).contains(&lat) && (-8.6..=1.8).contains(&lon) {
+        "United Kingdom"
+    } else if (50.8..=53.5).contains(&lat) && (3.4..=7.2).contains(&lon) {
+        "Netherlands"
+    } else if (49.5..=51.5).contains(&lat) && (2.5..=6.4).contains(&lon) {
+        "Belgium"
+    } else if (46.4..=49.0).contains(&lat) && (5.9..=10.5).contains(&lon) {
+        "Switzerland"
+    } else if (46.4..=49.0).contains(&lat) && (9.5..=17.2).contains(&lon) {
+        "Austria"
+    } else if (49.0..=54.9).contains(&lat) && (14.1..=24.2).contains(&lon) {
+        "Poland"
+    } else if (55.0..=69.1).contains(&lat) && (4.5..=31.1).contains(&lon) {
+        if lon < 10.0 {
+            "Norway"
+        } else if lon < 24.2 {
+            "Sweden"
+        } else {
+            "Finland"
+        }
+    } else {
+        "Unknown"
+    }
+}
+
+/// Fetches active weather alerts from the NWS API for US locations.
+async fn fetch_nws_alerts(
     latitude: f64,
     longitude: f64,
 ) -> Result<Vec<Alert>, Box<dyn std::error::Error + Send + Sync>> {
-    if !is_us_coordinates(latitude, longitude) {
-        return Ok(vec![]);
-    }
-
     let url = format!(
         "https://api.weather.gov/alerts/active?point={},{}",
         latitude, longitude
@@ -452,7 +642,6 @@ pub async fn fetch_alerts(
         .filter_map(|feature| {
             let props = feature.properties;
 
-            // Parse timestamps
             let sent = DateTime::parse_from_rfc3339(&props.sent)
                 .ok()?
                 .with_timezone(&Utc);
@@ -464,7 +653,6 @@ pub async fn fetch_alerts(
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(|| sent + chrono::Duration::hours(24));
 
-            // Skip expired alerts
             if expires < Utc::now() {
                 return None;
             }
@@ -490,6 +678,219 @@ pub async fn fetch_alerts(
 
     eprintln!("Fetched {} active alert(s) from NWS", alerts.len());
     Ok(alerts)
+}
+
+/// Resolves the user's EMMA_ID by looking up their location and matching against codenames.
+async fn resolve_user_emma_id(
+    latitude: f64,
+    longitude: f64,
+    country_code: &str,
+) -> Option<String> {
+    // Get location details from Nominatim
+    let nominatim_url = format!(
+        "https://nominatim.openstreetmap.org/reverse?lat={}&lon={}&format=json",
+        latitude, longitude
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&nominatim_url)
+        .header(
+            "User-Agent",
+            "(cosmic-ext-applet-tempest, https://github.com/VintageTechie/cosmic-ext-applet-tempest)",
+        )
+        .send()
+        .await
+        .ok()?;
+
+    let nominatim: NominatimResponse = response.json().await.ok()?;
+    let address = nominatim.address?;
+
+    // Build list of location names to search for (most specific to least)
+    let mut search_terms: Vec<String> = Vec::new();
+
+    if let Some(city) = &address.city {
+        search_terms.push(city.clone());
+        search_terms.push(format!("Stadt {}", city));
+    }
+    if let Some(town) = &address.town {
+        search_terms.push(town.clone());
+    }
+    if let Some(county) = &address.county {
+        search_terms.push(county.clone());
+        search_terms.push(format!("Kreis {}", county));
+    }
+    if let Some(state) = &address.state {
+        search_terms.push(state.clone());
+    }
+
+    // Fetch MeteoAlarm codenames
+    let codenames_url =
+        "https://raw.githubusercontent.com/ktrue/Meteoalarm-warning/master/meteoalarm-codenames.json";
+    let codenames_response = reqwest::get(codenames_url).await.ok()?;
+    let codenames: MeteoAlarmCodenames = codenames_response.json().await.ok()?;
+
+    // Find matching EMMA_ID for this country
+    let country_prefix = country_code.to_uppercase();
+    for search_term in &search_terms {
+        let search_lower = search_term.to_lowercase();
+        for (emma_id, name) in &codenames.codes {
+            // Only match codes for the user's country
+            if !emma_id.starts_with(&country_prefix) {
+                continue;
+            }
+            if name.to_lowercase().contains(&search_lower)
+                || search_lower.contains(&name.to_lowercase())
+            {
+                eprintln!(
+                    "Resolved EMMA_ID: {} ({}) for search term '{}'",
+                    emma_id, name, search_term
+                );
+                return Some(emma_id.clone());
+            }
+        }
+    }
+
+    eprintln!(
+        "Could not resolve EMMA_ID for location: {:?}",
+        search_terms.first()
+    );
+    None
+}
+
+/// Fetches active weather alerts from MeteoAlarm for European locations.
+async fn fetch_meteoalarm_alerts(
+    latitude: f64,
+    longitude: f64,
+    country: &str,
+) -> Result<Vec<Alert>, Box<dyn std::error::Error + Send + Sync>> {
+    let (slug, country_code) = match get_meteoalarm_info(country) {
+        Some(info) => info,
+        None => {
+            eprintln!("Country '{}' not covered by MeteoAlarm", country);
+            return Ok(vec![]);
+        }
+    };
+
+    // Try to resolve user's specific EMMA_ID for region filtering
+    let user_emma_id = resolve_user_emma_id(latitude, longitude, country_code).await;
+
+    let url = format!(
+        "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-{}",
+        slug
+    );
+
+    let response = reqwest::get(&url).await?;
+    if !response.status().is_success() {
+        return Err(format!("MeteoAlarm returned status: {}", response.status()).into());
+    }
+
+    let xml_text = response.text().await?;
+    let feed: MeteoAlarmFeed = quick_xml::de::from_str(&xml_text)?;
+
+    let alerts: Vec<Alert> = feed
+        .entries
+        .into_iter()
+        .filter_map(|entry| parse_meteoalarm_entry(entry, &user_emma_id))
+        .collect();
+
+    eprintln!(
+        "Fetched {} active alert(s) from MeteoAlarm ({})",
+        alerts.len(),
+        country
+    );
+    Ok(alerts)
+}
+
+/// Parses a MeteoAlarm entry into an Alert struct.
+/// Returns None if the entry doesn't match user's EMMA_ID or is expired.
+fn parse_meteoalarm_entry(entry: MeteoAlarmEntry, user_emma_id: &Option<String>) -> Option<Alert> {
+    let now = Utc::now();
+
+    // Filter by EMMA_ID if we resolved one for the user
+    if let Some(user_id) = user_emma_id {
+        let entry_emma_id = entry
+            .cap_geocode
+            .as_ref()
+            .and_then(|gc| gc.value.as_ref());
+
+        match entry_emma_id {
+            Some(entry_id) if entry_id != user_id => {
+                // Entry has an EMMA_ID but it doesn't match user's location
+                return None;
+            }
+            _ => {
+                // Either matches or entry has no geocode (include it)
+            }
+        }
+    }
+
+    // Parse sent timestamp
+    let sent = entry
+        .cap_sent
+        .as_ref()
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or(now);
+
+    // Parse expires timestamp
+    let expires = entry
+        .cap_expires
+        .as_ref()
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|| sent + chrono::Duration::hours(24));
+
+    // Skip expired alerts
+    if expires < now {
+        return None;
+    }
+
+    let event = entry
+        .cap_event
+        .unwrap_or_else(|| "Weather Alert".to_string());
+
+    let headline = entry.title.unwrap_or_else(|| event.clone());
+
+    let severity = entry
+        .cap_severity
+        .as_deref()
+        .map(AlertSeverity::from_meteoalarm_string)
+        .unwrap_or(AlertSeverity::Unknown);
+
+    Some(Alert {
+        id: entry.cap_identifier.unwrap_or(entry.id),
+        event,
+        severity,
+        urgency: entry.cap_urgency.unwrap_or_else(|| "Unknown".to_string()),
+        headline,
+        description: String::new(), // MeteoAlarm feeds don't include descriptions
+        instruction: None,
+        area_desc: entry.cap_area_desc.unwrap_or_default(),
+        sent,
+        expires,
+    })
+}
+
+/// Fetches active weather alerts based on location.
+/// Dispatches to appropriate regional API (NWS for US, MeteoAlarm for EU).
+pub async fn fetch_alerts(
+    latitude: f64,
+    longitude: f64,
+) -> Result<Vec<Alert>, Box<dyn std::error::Error + Send + Sync>> {
+    if is_us_coordinates(latitude, longitude) {
+        return fetch_nws_alerts(latitude, longitude).await;
+    }
+
+    if is_european_location(latitude, longitude) {
+        let country = detect_country_from_coords(latitude, longitude)
+            .await
+            .unwrap_or_default();
+        return fetch_meteoalarm_alerts(latitude, longitude, &country).await;
+    }
+
+    // No alert coverage for this region
+    Ok(vec![])
 }
 
 /// Converts WMO weather codes to human-readable descriptions

@@ -113,7 +113,7 @@ pub struct Config {
     pub last_updated: Option<i64>,
     /// Last selected tab, restored on popup open.
     pub default_tab: PopupTab,
-    /// Enable weather alerts (US only via NWS).
+    /// Enable weather alerts (US via NWS, EU via MeteoAlarm).
     #[serde(default = "default_alerts_enabled")]
     pub alerts_enabled: bool,
     /// Automatically select units based on detected location.
