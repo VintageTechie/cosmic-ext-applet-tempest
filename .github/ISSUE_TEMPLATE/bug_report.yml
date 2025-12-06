@@ -1,0 +1,39 @@
+name: Bug Report
+description: Report something that isn't working
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Tempest version
+      placeholder: "v1.4.0"
+    validations:
+      required: true
+  - type: input
+    id: cosmic-version
+    attributes:
+      label: COSMIC/Pop!_OS version
+      placeholder: "Pop!_OS 24.04, COSMIC Beta 9"
+    validations:
+      required: true
