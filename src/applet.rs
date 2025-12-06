@@ -15,8 +15,9 @@ use crate::config::{Config, MeasurementSystem, PopupTab, TemperatureUnit};
 use crate::weather::{
     aqi_standard_label, aqi_to_description, detect_location, fetch_air_quality, fetch_alerts,
     fetch_weather, format_date, format_hour, format_time, is_night_time, search_city,
-    weathercode_to_description, weathercode_to_icon_name, wind_direction_to_compass,
-    AirQualityData, Alert, AlertSeverity, AqiStandard, LocationResult, WeatherData,
+    uses_imperial_units, weathercode_to_description, weathercode_to_icon_name,
+    wind_direction_to_compass, AirQualityData, Alert, AlertSeverity, AqiStandard, LocationResult,
+    WeatherData,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -96,13 +97,14 @@ pub enum Message {
     Tick,
     ToggleTemperatureUnit,
     ToggleAlertsEnabled,
+    ToggleAutoUnits,
     UpdateCityInput(String),
     SearchCity,
     CitySearchResult(Result<Vec<LocationResult>, String>),
     SelectLocation(usize),
     UpdateRefreshInterval(String),
     DetectLocation,
-    LocationDetected(Result<(f64, f64, String), String>),
+    LocationDetected(Result<(f64, f64, String, String), String>),
     ToggleAutoLocation,
     SelectTab(PopupTab),
     OpenUrl(String),
@@ -609,6 +611,18 @@ impl Application for Tempest {
                             .on_press(Message::ToggleTemperatureUnit),
                     ));
 
+                    column = column.push(settings::item(
+                        "Auto-select Units",
+                        widget::row()
+                            .spacing(8)
+                            .align_y(cosmic::iced::Alignment::Center)
+                            .push(
+                                widget::toggler(self.config.auto_units)
+                                    .on_toggle(|_| Message::ToggleAutoUnits),
+                            )
+                            .push(text("Based on location").size(11)),
+                    ));
+
                     column = column.push(widget::divider::horizontal::default());
 
                     // Location section
@@ -857,6 +871,8 @@ impl Application for Tempest {
                         self.config.measurement_system = MeasurementSystem::Imperial;
                     }
                 };
+                // Manual unit change disables auto-units
+                self.config.auto_units = false;
                 self.save_config();
                 return Task::perform(async { Message::RefreshWeather }, Action::App);
             }
@@ -867,6 +883,10 @@ impl Application for Tempest {
                 }
                 self.save_config();
                 return Task::perform(async { Message::RefreshWeather }, Action::App);
+            }
+            Message::ToggleAutoUnits => {
+                self.config.auto_units = !self.config.auto_units;
+                self.save_config();
             }
             Message::UpdateCityInput(value) => {
                 self.city_input = value;
@@ -899,6 +919,17 @@ impl Application for Tempest {
                     self.config.manual_latitude = Some(location.latitude);
                     self.config.manual_longitude = Some(location.longitude);
                     self.config.manual_location_name = Some(location.display_name.clone());
+
+                    if self.config.auto_units {
+                        if uses_imperial_units(&location.country) {
+                            self.config.temperature_unit = TemperatureUnit::Fahrenheit;
+                            self.config.measurement_system = MeasurementSystem::Imperial;
+                        } else {
+                            self.config.temperature_unit = TemperatureUnit::Celsius;
+                            self.config.measurement_system = MeasurementSystem::Metric;
+                        }
+                    }
+
                     self.city_input.clear();
                     self.search_results.clear();
                     self.save_config();
@@ -951,10 +982,21 @@ impl Application for Tempest {
                 );
             }
             Message::LocationDetected(result) => match result {
-                Ok((lat, lon, location_name)) => {
+                Ok((lat, lon, location_name, country)) => {
                     self.config.latitude = lat;
                     self.config.longitude = lon;
                     self.config.location_name = location_name;
+
+                    if self.config.auto_units {
+                        if uses_imperial_units(&country) {
+                            self.config.temperature_unit = TemperatureUnit::Fahrenheit;
+                            self.config.measurement_system = MeasurementSystem::Imperial;
+                        } else {
+                            self.config.temperature_unit = TemperatureUnit::Celsius;
+                            self.config.measurement_system = MeasurementSystem::Metric;
+                        }
+                    }
+
                     self.save_config();
                     return Task::perform(async { Message::RefreshWeather }, Action::App);
                 }
