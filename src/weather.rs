@@ -319,13 +319,15 @@ pub struct LocationResult {
     pub latitude: f64,
     pub longitude: f64,
     pub display_name: String,
+    pub country: String,
 }
 
 impl LocationResult {
     fn from_geocoding_result(result: &GeocodingResult) -> Self {
+        let country = result.country.clone().unwrap_or_default();
         let display_name = match (&result.admin1, &result.country) {
-            (Some(admin), Some(country)) => format!("{}, {}, {}", result.name, admin, country),
-            (None, Some(country)) => format!("{}, {}", result.name, country),
+            (Some(admin), Some(c)) => format!("{}, {}, {}", result.name, admin, c),
+            (None, Some(c)) => format!("{}, {}", result.name, c),
             _ => result.name.clone(),
         };
 
@@ -333,6 +335,7 @@ impl LocationResult {
             latitude: result.latitude,
             longitude: result.longitude,
             display_name,
+            country,
         }
     }
 }
@@ -364,8 +367,9 @@ pub async fn search_city(
     Err(format!("No results found for '{}'", city_name).into())
 }
 
-/// Detects user location automatically using IP-based geolocation
-pub async fn detect_location() -> Result<(f64, f64, String), Box<dyn std::error::Error>> {
+/// Detects user location automatically using IP-based geolocation.
+/// Returns (latitude, longitude, display_name, country).
+pub async fn detect_location() -> Result<(f64, f64, String, String), Box<dyn std::error::Error>> {
     let url = "http://ip-api.com/json/?fields=status,lat,lon,city,regionName,country";
 
     let response = reqwest::get(url).await?;
@@ -373,10 +377,11 @@ pub async fn detect_location() -> Result<(f64, f64, String), Box<dyn std::error:
 
     if data.status == "success" {
         if let (Some(lat), Some(lon)) = (data.lat, data.lon) {
+            let country = data.country.clone().unwrap_or_default();
             let location_name = match (data.city, data.region_name, data.country) {
-                (Some(city), _, Some(country)) => format!("{}, {}", city, country),
-                (_, Some(region), Some(country)) => format!("{}, {}", region, country),
-                (_, _, Some(country)) => country,
+                (Some(city), _, Some(c)) => format!("{}, {}", city, c),
+                (_, Some(region), Some(c)) => format!("{}, {}", region, c),
+                (_, _, Some(c)) => c,
                 _ => "Unknown".to_string(),
             };
 
@@ -384,11 +389,17 @@ pub async fn detect_location() -> Result<(f64, f64, String), Box<dyn std::error:
                 "Auto-detected location: {}, {} ({})",
                 lat, lon, location_name
             );
-            return Ok((lat, lon, location_name));
+            return Ok((lat, lon, location_name, country));
         }
     }
 
     Err("Failed to detect location from IP address".into())
+}
+
+/// Returns true if the country uses imperial units (Fahrenheit, mph, miles).
+/// Only US, Liberia, and Myanmar officially use imperial.
+pub fn uses_imperial_units(country: &str) -> bool {
+    matches!(country, "United States" | "Liberia" | "Myanmar")
 }
 
 /// Checks if coordinates fall within US territory (continental US, Alaska, Hawaii).

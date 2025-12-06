@@ -116,9 +116,16 @@ pub struct Config {
     /// Enable weather alerts (US only via NWS).
     #[serde(default = "default_alerts_enabled")]
     pub alerts_enabled: bool,
+    /// Automatically select units based on detected location.
+    #[serde(default = "default_auto_units")]
+    pub auto_units: bool,
 }
 
 fn default_alerts_enabled() -> bool {
+    true
+}
+
+fn default_auto_units() -> bool {
     true
 }
 
@@ -138,6 +145,7 @@ impl Default for Config {
             last_updated: None,
             default_tab: PopupTab::default(),
             alerts_enabled: true,
+            auto_units: true,
         }
     }
 }
