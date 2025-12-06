@@ -8,6 +8,8 @@ A weather applet for COSMIC Desktop with automatic location detection.
 |------|-------------|----------------|----------|
 | ![Main](screenshots/tempest-main.png) | ![Air Quality](screenshots/tempest-aiq.png) | ![7-Day](screenshots/tempest-7day.png) | ![Settings](screenshots/tempest-settings.png) |
 
+*Note: Hourly and Alerts tabs not shown above.*
+
 ## Features
 
 - Real-time weather data from Open-Meteo API (no API key required)
@@ -17,14 +19,18 @@ A weather applet for COSMIC Desktop with automatic location detection.
   - Wind information (speed, direction, gusts)
   - UV index, cloud cover, visibility, pressure
   - Sunrise and sunset times
-  - **Air Quality tab**: AQI, PM2.5, PM10, Ozone, NO2, CO levels
-  - **Hourly tab**: Next 12 hours forecast
+  - **Air Quality tab**: AQI (US/EU standards), PM2.5, PM10, Ozone, NO2, CO levels
+  - **Alerts tab**: Weather alerts from NWS (US locations only)
+  - **Hourly tab**: Next 12 hours forecast with precipitation probability
   - **7-Day tab**: Weekly forecast with high/low temperatures
   - **Settings tab**: All configuration options
 - Automatic location detection via IP geolocation
+- Manual location override with city search
 - Remembers last selected tab between sessions
 - Configurable temperature unit (Fahrenheit/Celsius)
+- Configurable measurement system (Imperial/Metric) for wind and visibility
 - Configurable refresh interval
+- Desktop notifications for weather alerts
 - Persistent configuration
 - Global weather coverage
 
@@ -53,17 +59,16 @@ For vendoring, use `just vendor` and `just vendor-build`
 
 ## Configuration
 
-Click the applet to open the popup, which includes a settings section where you can:
+Click the applet to open the popup and navigate to the Settings tab where you can:
 
+- Toggle between automatic and manual location detection
+- Search for a city by name or enter coordinates manually
 - Toggle temperature unit (Fahrenheit/Celsius)
-- Enter custom latitude and longitude
-- Set refresh interval (in minutes)
-- View current version
-- Support development via Ko-fi
+- Toggle measurement system (Imperial/Metric)
+- Set refresh interval (1-1440 minutes)
+- Enable or disable weather alerts (US locations only)
 
-Settings are automatically saved and will persist across sessions. The applet defaults to New York City coordinates (40.7128, -74.0060).
-
-The applet supports automatic location detection via IP geolocation.
+Settings are automatically saved and persist across sessions. The applet defaults to New York City coordinates (40.7128, -74.0060) if no location is detected.
 
 ## Development
 
