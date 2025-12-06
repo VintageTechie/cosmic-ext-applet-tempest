@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+that <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>com.vintagetechie.CosmicExtAppletTempest</id>
   <metadata_license>CC0-1.0</metadata_license>
@@ -10,23 +10,24 @@
     <p>
       Tempest is a weather applet for the COSMIC Desktop environment that provides
       real-time weather information with automatic location detection. It displays
-      current conditions, temperature, and forecasts directly in your panel.
+      current conditions, temperature, and AQI directly in your panel.
     </p>
     <p>Features:</p>
     <ul>
       <li>Real-time weather data from Open-Meteo API (no API key required)</li>
       <li>Automatic location detection via IP geolocation</li>
-      <li>Current temperature displayed in panel</li>
-      <li>Detailed popup with comprehensive weather information</li>
-      <li>Manual refresh button and last updated timestamp</li>
+      <li>Current temperature and AQI displayed in panel</li>
+      <li>Tabbed popup interface with weather, air quality, alerts, forecasts, and settings</li>
       <li>Current conditions including temperature, feels-like, and humidity</li>
       <li>Wind information with speed, direction compass, and gusts</li>
       <li>UV index, cloud cover, visibility, and atmospheric pressure</li>
+      <li>Sunrise and sunset times with timezone support</li>
       <li>Air quality data with PM2.5, PM10, ozone, NO2, and CO readings</li>
       <li>Auto-detects US or European AQI standard based on location</li>
-      <li>Sunrise and sunset times with timezone support</li>
-      <li>Collapsible hourly forecast for next 12 hours</li>
-      <li>Collapsible 7-day forecast with high/low temperatures</li>
+      <li>Weather alerts for US locations via NWS API</li>
+      <li>Hourly forecast for next 12 hours</li>
+      <li>7-day forecast with high/low temperatures</li>
+      <li>Auto-select temperature and measurement units based on location</li>
       <li>Configurable temperature units (Fahrenheit/Celsius)</li>
       <li>Custom location support (latitude/longitude)</li>
       <li>Adjustable refresh interval</li>
@@ -46,6 +47,35 @@
   </categories>
 
   <releases>
+    <release version="1.4.0" date="2025-12-05">
+      <description>
+        <p>Auto-units and weather alerts</p>
+        <ul>
+          <li>Auto-select temperature and measurement units based on detected location</li>
+          <li>Weather alerts for US locations via NWS API</li>
+          <li>Fixed packaging configuration in justfile</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.3.0" date="2025-11-27">
+      <description>
+        <p>Tabbed interface</p>
+        <ul>
+          <li>Tabbed popup interface replacing collapsible sections</li>
+          <li>Night icon detection using actual sunrise/sunset times</li>
+          <li>Resolved clippy warnings</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.0" date="2025-11-26">
+      <description>
+        <p>Location and unit improvements</p>
+        <ul>
+          <li>Remember manual location settings between sessions</li>
+          <li>Sync measurement units with temperature unit selection</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2025-11-25">
       <description>
         <p>Air quality and UI improvements</p>
@@ -54,15 +84,22 @@
           <li>AQI displayed in panel alongside temperature</li>
           <li>Collapsible air quality section with PM2.5, PM10, ozone, NO2, CO</li>
           <li>Auto-detects European locations and uses EU AQI scale</li>
-          <li>Weather and air quality fetched in parallel</li>
           <li>Improved date formatting in 7-day forecast</li>
           <li>Added weather icons to forecast rows</li>
-          <li>Replaced Unicode arrows with proper icons in collapsible headers</li>
-          <li>Removed emoji characters for cleaner appearance</li>
         </ul>
       </description>
     </release>
-    <release version="1.0.1" date="2025-01-24">
+    <release version="1.0.2" date="2025-11-24">
+      <description>
+        <p>CI/CD and Flatpak fix</p>
+        <ul>
+          <li>Automated .deb package releases via GitHub Actions</li>
+          <li>Added install-dev target in justfile</li>
+          <li>Fixed %F argument causing Flatpak launch failure</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.0.1" date="2025-11-24">
       <description>
         <p>Metadata fix for COSMIC Store visibility</p>
         <ul>
@@ -71,7 +108,7 @@
         </ul>
       </description>
     </release>
-    <release version="1.0.0" date="2025-01-21">
+    <release version="1.0.0" date="2025-11-21">
       <description>
         <p>Initial production release</p>
         <ul>
