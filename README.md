@@ -10,6 +10,10 @@ A weather applet for COSMIC Desktop with automatic location detection.
 
 *Note: Hourly and Alerts tabs not shown above.*
 
+## Roadmap
+   
+   See planned features and progress on the [Project Board](https://github.com/users/VintageTechie/projects/1)
+
 ## Features
 
 - Real-time weather data from Open-Meteo API (no API key required)
