@@ -1,4 +1,4 @@
-that <?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>com.vintagetechie.CosmicExtAppletTempest</id>
   <metadata_license>CC0-1.0</metadata_license>
@@ -24,7 +24,7 @@ that <?xml version="1.0" encoding="UTF-8"?>
       <li>Sunrise and sunset times with timezone support</li>
       <li>Air quality data with PM2.5, PM10, ozone, NO2, and CO readings</li>
       <li>Auto-detects US or European AQI standard based on location</li>
-      <li>Weather alerts for US locations via NWS API</li>
+      <li>Weather alerts for US (NWS) and European (MeteoAlarm) locations</li>
       <li>Hourly forecast for next 12 hours</li>
       <li>7-day forecast with high/low temperatures</li>
       <li>Auto-select temperature and measurement units based on location</li>
@@ -37,7 +37,9 @@ that <?xml version="1.0" encoding="UTF-8"?>
   <url type="homepage">https://github.com/VintageTechie/cosmic-ext-applet-tempest</url>
   <url type="bugtracker">https://github.com/VintageTechie/cosmic-ext-applet-tempest/issues</url>
   <url type="donation">https://ko-fi.com/vintagetechie</url>
-  <developer_name>VintageTechie (John Crenshaw)</developer_name>
+  <developer id="com.vintagetechie">
+    <name>VintageTechie (John Crenshaw)</name>
+  </developer>
   <update_contact>john@vintagetechie.com</update_contact>
   <launchable type="desktop-id">com.vintagetechie.CosmicExtAppletTempest.desktop</launchable>
 
@@ -47,13 +49,14 @@ that <?xml version="1.0" encoding="UTF-8"?>
   </categories>
 
   <releases>
-    <release version="1.4.0" date="2025-12-05">
+    <release version="1.4.0" date="2025-12-07">
       <description>
-        <p>Auto-units and weather alerts</p>
+        <p>Weather alerts and auto-units</p>
         <ul>
-          <li>Auto-select temperature and measurement units based on detected location</li>
           <li>Weather alerts for US locations via NWS API</li>
-          <li>Fixed packaging configuration in justfile</li>
+          <li>Weather alerts for European locations via MeteoAlarm</li>
+          <li>Auto-select temperature and measurement units based on detected location</li>
+          <li>Improved popup layout</li>
         </ul>
       </description>
     </release>
@@ -128,8 +131,20 @@ that <?xml version="1.0" encoding="UTF-8"?>
 
   <screenshots>
     <screenshot type="default">
-      <caption>Tempest weather applet showing current conditions and forecasts</caption>
+      <caption>Current weather conditions</caption>
       <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-main.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Air quality information</caption>
+      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-aiq.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>7-day weather forecast</caption>
+      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-7day.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings and configuration</caption>
+      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-settings.png</image>
     </screenshot>
   </screenshots>
 
