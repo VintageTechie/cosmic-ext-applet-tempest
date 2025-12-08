@@ -536,6 +536,19 @@ impl Application for Tempest {
                                                 .push(text(&alert.event).size(14)),
                                         )
                                         .push(text(&alert.headline).size(12))
+                                        .push_maybe(if alert.description.is_empty() {
+                                            None
+                                        } else {
+                                            Some(
+                                                widget::container(
+                                                    widget::scrollable(
+                                                        text(&alert.description).size(11),
+                                                    )
+                                                    .height(cosmic::iced::Length::Fixed(100.0)),
+                                                )
+                                                .padding([4, 0, 4, 0]),
+                                            )
+                                        })
                                         .push(
                                             text(format!(
                                                 "Expires: {}",
