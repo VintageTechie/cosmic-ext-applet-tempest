@@ -49,6 +49,16 @@
   </categories>
 
   <releases>
+    <release version="1.4.1" date="2025-12-08">
+      <description>
+        <p>Alert details and updated screenshots</p>
+        <ul>
+          <li>Show alert description in weather alerts display</li>
+          <li>Updated screenshots</li>
+          <li>Added alerts screenshot</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.0" date="2025-12-07">
       <description>
         <p>Weather alerts and auto-units</p>
@@ -141,6 +151,10 @@
     <screenshot>
       <caption>7-day weather forecast</caption>
       <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-7day.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Weather alerts</caption>
+      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-alerts.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings and configuration</caption>
