@@ -38,6 +38,7 @@ impl TemperatureUnit {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PopupTab {
     #[default]
+    Current,
     AirQuality,
     Alerts,
     Hourly,
