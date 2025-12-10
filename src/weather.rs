@@ -185,6 +185,46 @@ struct MeteoAlarmGeocode {
     value: Option<String>,
 }
 
+/// ECCC CAP alert response structure (Environment and Climate Change Canada)
+#[derive(Debug, Deserialize)]
+struct EcccCapAlert {
+    identifier: String,
+    status: String,
+    #[serde(rename = "msgType")]
+    msg_type: String,
+    sent: String,
+    #[serde(rename = "info", default)]
+    info_blocks: Vec<EcccCapInfo>,
+}
+
+/// Info block from ECCC CAP alert (one per language)
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct EcccCapInfo {
+    language: Option<String>,
+    category: Option<String>,
+    event: Option<String>,
+    urgency: Option<String>,
+    severity: Option<String>,
+    certainty: Option<String>,
+    effective: Option<String>,
+    expires: Option<String>,
+    headline: Option<String>,
+    description: Option<String>,
+    instruction: Option<String>,
+    #[serde(rename = "area", default)]
+    areas: Vec<EcccCapArea>,
+}
+
+/// Area element from ECCC CAP alert
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct EcccCapArea {
+    #[serde(rename = "areaDesc")]
+    area_desc: Option<String>,
+    polygon: Option<String>,
+}
+
 /// Nominatim reverse geocoding response
 #[derive(Debug, Deserialize)]
 struct NominatimResponse {
@@ -313,13 +353,37 @@ pub async fn fetch_weather(
 }
 
 /// Checks if coordinates fall within US territory (continental US, Alaska, Hawaii).
+/// Excludes Canadian territory by respecting the US-Canada border.
 fn is_us_bounds(lat: f64, lon: f64) -> bool {
-    // Continental US: lat 24-49, lon -125 to -66
-    let continental = (24.0..=49.0).contains(&lat) && (-125.0..=-66.0).contains(&lon);
     // Alaska: lat 51-72, lon -180 to -129
     let alaska = (51.0..=72.0).contains(&lat) && (-180.0..=-129.0).contains(&lon);
     // Hawaii: lat 18-23, lon -161 to -154
     let hawaii = (18.0..=23.0).contains(&lat) && (-161.0..=-154.0).contains(&lon);
+
+    // Continental US with proper northern border respecting Canada:
+    // The US-Canada border varies by region:
+    // - West (Pacific to Lake of the Woods): 49N
+    // - Great Lakes region: follows the lakes (42-47N)
+    // - East (St. Lawrence to Atlantic): ~45N
+    let continental = if lon < -95.0 {
+        // Western US: border at 49N
+        (24.0..=49.0).contains(&lat) && (-125.0..=-95.0).contains(&lon)
+    } else if lon < -84.0 {
+        // Upper Midwest (MN, WI, MI upper): border near 49N for MN,
+        // drops to ~46N for Lake Superior region
+        (24.0..=46.5).contains(&lat) && (-95.0..=-84.0).contains(&lon)
+    } else if lon < -76.0 {
+        // Great Lakes / Southern Ontario overlap zone (MI, OH, NY, PA):
+        // Lake Erie is at ~42N, Lake Ontario's south shore at ~43.3N
+        // Use 43N to exclude Toronto and everything north of the lakes
+        (24.0..=43.0).contains(&lat) && (-84.0..=-76.0).contains(&lon)
+    } else if lon < -67.0 {
+        // Northeast US (NY, VT, NH, MA, CT, RI): St. Lawrence border ~45N
+        (24.0..=45.0).contains(&lat) && (-76.0..=-67.0).contains(&lon)
+    } else {
+        // Maine: border goes up to ~47N
+        (24.0..=47.0).contains(&lat) && (-67.0..=-66.0).contains(&lon)
+    };
 
     continental || alaska || hawaii
 }
@@ -337,7 +401,6 @@ fn is_europe_bounds(lat: f64, lon: f64) -> bool {
 }
 
 /// Detects geographic region from coordinates for alert provider selection.
-/// US is checked first since NWS provides better point-based queries for border regions.
 pub fn detect_region(lat: f64, lon: f64) -> Region {
     if is_us_bounds(lat, lon) {
         return Region::Us;
@@ -890,6 +953,302 @@ fn parse_meteoalarm_entry(entry: MeteoAlarmEntry, user_emma_id: &Option<String>)
     })
 }
 
+/// Maps Canadian province/territory to ECCC weather office codes.
+/// Returns the primary office and optionally a secondary office for border regions.
+fn get_eccc_office_codes(lat: f64, lon: f64) -> Vec<&'static str> {
+    // Office codes based on approximate provincial boundaries
+    // CWTO - Ontario Storm Prediction Centre (Toronto)
+    // CWUL - Quebec Storm Prediction Centre (Montreal)
+    // CWHX - Atlantic Storm Prediction Centre (Dartmouth) - NS, NB, PE, NL
+    // CWWG - Prairie Storm Prediction Centre (Winnipeg) - MB, SK
+    // CWNT - Prairie and Arctic Storm Prediction Centre (Edmonton) - AB, NT, NU
+    // CWVR - Pacific and Yukon Storm Prediction Centre (Vancouver) - BC, YT
+
+    let mut offices = Vec::new();
+
+    // British Columbia: roughly west of -120
+    if lon < -114.0 && lat < 60.0 {
+        offices.push("CWVR");
+    }
+    // Yukon: northwest corner
+    if lon < -124.0 && lat > 60.0 {
+        offices.push("CWVR");
+    }
+    // Alberta: -120 to -110, south of 60
+    if (-120.0..=-110.0).contains(&lon) && lat < 60.0 {
+        offices.push("CWNT");
+    }
+    // Northwest Territories and Nunavut: north of 60
+    if lat > 60.0 && lon > -124.0 {
+        offices.push("CWNT");
+    }
+    // Saskatchewan and Manitoba: -110 to -89
+    if (-110.0..=-89.0).contains(&lon) && lat < 60.0 {
+        offices.push("CWWG");
+    }
+    // Ontario: -95 to -74
+    if (-95.0..=-74.0).contains(&lon) && lat < 56.0 {
+        offices.push("CWTO");
+    }
+    // Quebec: east of -79
+    if lon > -79.0 && lat < 55.0 && lon < -57.0 {
+        offices.push("CWUL");
+    }
+    // Atlantic provinces: east of -67 or specific lat/lon ranges
+    if lon > -67.0 || (lon > -64.0 && lat < 48.0) {
+        offices.push("CWHX");
+    }
+
+    // Fallback: if no office matched, return all major offices
+    if offices.is_empty() {
+        offices.push("CWTO");
+    }
+
+    offices
+}
+
+/// Checks if a point is inside a polygon using ray casting algorithm.
+fn point_in_polygon(lat: f64, lon: f64, polygon_str: &str) -> bool {
+    // Parse polygon string: "lat1,lon1 lat2,lon2 lat3,lon3 ..."
+    let vertices: Vec<(f64, f64)> = polygon_str
+        .split_whitespace()
+        .filter_map(|coord| {
+            let parts: Vec<&str> = coord.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(lat), Ok(lon)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                    return Some((lat, lon));
+                }
+            }
+            None
+        })
+        .collect();
+
+    if vertices.len() < 3 {
+        return false;
+    }
+
+    // Ray casting algorithm
+    let mut inside = false;
+    let n = vertices.len();
+    let mut j = n - 1;
+
+    for i in 0..n {
+        let (yi, xi) = vertices[i];
+        let (yj, xj) = vertices[j];
+
+        if ((yi > lat) != (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
+            inside = !inside;
+        }
+        j = i;
+    }
+
+    inside
+}
+
+/// Fetches active weather alerts from ECCC (Environment and Climate Change Canada).
+async fn fetch_eccc_alerts(
+    latitude: f64,
+    longitude: f64,
+) -> Result<Vec<Alert>, Box<dyn std::error::Error + Send + Sync>> {
+    let offices = get_eccc_office_codes(latitude, longitude);
+    let today = chrono::Utc::now().format("%Y%m%d").to_string();
+    let client = reqwest::Client::new();
+
+    let mut all_alerts: Vec<Alert> = Vec::new();
+    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for office in offices {
+        // Fetch directory listing for today's alerts from this office
+        let dir_url = format!(
+            "https://dd.weather.gc.ca/today/alerts/cap/{}/{}/",
+            today, office
+        );
+
+        let dir_response = match client.get(&dir_url).send().await {
+            Ok(resp) if resp.status().is_success() => resp,
+            _ => continue,
+        };
+
+        let dir_html = match dir_response.text().await {
+            Ok(text) => text,
+            Err(_) => continue,
+        };
+
+        // Parse hour directories from HTML listing
+        let hour_dirs: Vec<String> = dir_html
+            .lines()
+            .filter_map(|line| {
+                if line.contains("href=\"") && line.contains("/\"") {
+                    let start = line.find("href=\"")? + 6;
+                    let end = line[start..].find('"')? + start;
+                    let href = &line[start..end];
+                    // Match two-digit hour directories
+                    if href.len() == 3 && href.ends_with('/') {
+                        let hour = &href[..2];
+                        if hour.chars().all(|c| c.is_ascii_digit()) {
+                            return Some(hour.to_string());
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        for hour in hour_dirs {
+            let hour_url = format!("{}{}/", dir_url, hour);
+
+            let hour_response = match client.get(&hour_url).send().await {
+                Ok(resp) if resp.status().is_success() => resp,
+                _ => continue,
+            };
+
+            let hour_html = match hour_response.text().await {
+                Ok(text) => text,
+                Err(_) => continue,
+            };
+
+            // Parse CAP file links
+            let cap_files: Vec<String> = hour_html
+                .lines()
+                .filter_map(|line| {
+                    if line.contains(".cap\"") {
+                        let start = line.find("href=\"")? + 6;
+                        let end = line[start..].find('"')? + start;
+                        let href = &line[start..end];
+                        if href.ends_with(".cap") {
+                            return Some(href.to_string());
+                        }
+                    }
+                    None
+                })
+                .collect();
+
+            for cap_file in cap_files {
+                let cap_url = format!("{}{}", hour_url, cap_file);
+
+                let cap_response = match client.get(&cap_url).send().await {
+                    Ok(resp) if resp.status().is_success() => resp,
+                    _ => continue,
+                };
+
+                let cap_xml = match cap_response.text().await {
+                    Ok(text) => text,
+                    Err(_) => continue,
+                };
+
+                if let Some(alert) = parse_eccc_cap(&cap_xml, latitude, longitude, &mut seen_ids) {
+                    all_alerts.push(alert);
+                }
+            }
+        }
+    }
+
+    eprintln!("Fetched {} active alert(s) from ECCC", all_alerts.len());
+    Ok(all_alerts)
+}
+
+/// Parses an ECCC CAP XML document into an Alert struct.
+/// Filters by location using polygon containment and deduplicates by identifier.
+fn parse_eccc_cap(
+    xml: &str,
+    lat: f64,
+    lon: f64,
+    seen_ids: &mut std::collections::HashSet<String>,
+) -> Option<Alert> {
+    let cap: EcccCapAlert = quick_xml::de::from_str(xml).ok()?;
+
+    // Skip non-actual alerts (test, exercise, etc.)
+    if cap.status != "Actual" {
+        return None;
+    }
+
+    // Skip cancelled alerts
+    if cap.msg_type == "Cancel" {
+        return None;
+    }
+
+    // Find English info block (prefer en-CA)
+    let info = cap
+        .info_blocks
+        .iter()
+        .find(|i| {
+            i.language
+                .as_ref()
+                .map(|l| l.starts_with("en"))
+                .unwrap_or(false)
+        })
+        .or_else(|| cap.info_blocks.first())?;
+
+    // Check if user's location is within any of the alert areas
+    let mut location_matches = false;
+    let mut area_desc = String::new();
+
+    for area in &info.areas {
+        if let Some(ref polygon) = area.polygon {
+            if point_in_polygon(lat, lon, polygon) {
+                location_matches = true;
+                area_desc = area.area_desc.clone().unwrap_or_default();
+                break;
+            }
+        }
+    }
+
+    // If no polygon matched, skip this alert
+    if !location_matches {
+        return None;
+    }
+
+    let event = info.event.clone().unwrap_or_else(|| "Weather Alert".to_string());
+
+    // Deduplicate by event type + area (ECCC issues updates with new identifiers)
+    let dedup_key = format!("{}|{}", event, area_desc);
+    if seen_ids.contains(&dedup_key) {
+        return None;
+    }
+    seen_ids.insert(dedup_key);
+
+    // Parse timestamps
+    let now = Utc::now();
+
+    let sent = cap
+        .sent
+        .parse::<DateTime<chrono::FixedOffset>>()
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or(now);
+
+    let expires = info
+        .expires
+        .as_ref()
+        .and_then(|s| s.parse::<DateTime<chrono::FixedOffset>>().ok())
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|| sent + chrono::Duration::hours(24));
+
+    // Skip expired alerts
+    if expires < now {
+        return None;
+    }
+
+    let headline = info.headline.clone().unwrap_or_else(|| event.clone());
+
+    Some(Alert {
+        id: cap.identifier,
+        event,
+        severity: info
+            .severity
+            .as_deref()
+            .map(AlertSeverity::from_cap_string)
+            .unwrap_or(AlertSeverity::Unknown),
+        urgency: info.urgency.clone().unwrap_or_else(|| "Unknown".to_string()),
+        headline,
+        description: info.description.clone().unwrap_or_default(),
+        instruction: info.instruction.clone(),
+        area_desc,
+        sent,
+        expires,
+    })
+}
+
 /// Fetches active weather alerts based on location.
 /// Dispatches to appropriate regional API based on detected region.
 pub async fn fetch_alerts(
@@ -904,7 +1263,7 @@ pub async fn fetch_alerts(
                 .unwrap_or_default();
             fetch_meteoalarm_alerts(latitude, longitude, &country).await
         }
-        Region::Canada => Ok(vec![]), // TODO: implement ECCC alerts
+        Region::Canada => fetch_eccc_alerts(latitude, longitude).await,
         Region::Unknown => Ok(vec![]),
     }
 }
