@@ -54,6 +54,15 @@ pub enum AqiStandard {
     European,
 }
 
+/// Geographic region for alert provider and AQI standard selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Region {
+    Us,
+    Europe,
+    Canada,
+    Unknown,
+}
+
 /// Current air quality data
 #[derive(Debug, Clone)]
 pub struct AirQualityData {
@@ -77,19 +86,9 @@ pub enum AlertSeverity {
 }
 
 impl AlertSeverity {
-    /// Parses NWS severity string into enum variant.
-    fn from_nws_string(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "minor" => Self::Minor,
-            "moderate" => Self::Moderate,
-            "severe" => Self::Severe,
-            "extreme" => Self::Extreme,
-            _ => Self::Unknown,
-        }
-    }
-
-    /// Parses MeteoAlarm severity string into enum variant.
-    fn from_meteoalarm_string(s: &str) -> Self {
+    /// Parses CAP severity string into enum variant.
+    /// Handles variations across providers (NWS, MeteoAlarm, ECCC).
+    fn from_cap_string(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "minor" => Self::Minor,
             "moderate" => Self::Moderate,
@@ -313,10 +312,43 @@ pub async fn fetch_weather(
     })
 }
 
-/// Checks if coordinates fall within Europe
-fn is_european_location(latitude: f64, longitude: f64) -> bool {
+/// Checks if coordinates fall within US territory (continental US, Alaska, Hawaii).
+fn is_us_bounds(lat: f64, lon: f64) -> bool {
+    // Continental US: lat 24-49, lon -125 to -66
+    let continental = (24.0..=49.0).contains(&lat) && (-125.0..=-66.0).contains(&lon);
+    // Alaska: lat 51-72, lon -180 to -129
+    let alaska = (51.0..=72.0).contains(&lat) && (-180.0..=-129.0).contains(&lon);
+    // Hawaii: lat 18-23, lon -161 to -154
+    let hawaii = (18.0..=23.0).contains(&lat) && (-161.0..=-154.0).contains(&lon);
+
+    continental || alaska || hawaii
+}
+
+/// Checks if coordinates fall within Canada.
+fn is_canada_bounds(lat: f64, lon: f64) -> bool {
+    // Canada: lat 41-84, lon -141 to -52
+    (41.0..=84.0).contains(&lat) && (-141.0..=-52.0).contains(&lon)
+}
+
+/// Checks if coordinates fall within Europe.
+fn is_europe_bounds(lat: f64, lon: f64) -> bool {
     // Rough bounding box: lat 35-71, lon -25 to 40
-    (35.0..=71.0).contains(&latitude) && (-25.0..=40.0).contains(&longitude)
+    (35.0..=71.0).contains(&lat) && (-25.0..=40.0).contains(&lon)
+}
+
+/// Detects geographic region from coordinates for alert provider selection.
+/// US is checked first since NWS provides better point-based queries for border regions.
+pub fn detect_region(lat: f64, lon: f64) -> Region {
+    if is_us_bounds(lat, lon) {
+        return Region::Us;
+    }
+    if is_canada_bounds(lat, lon) {
+        return Region::Canada;
+    }
+    if is_europe_bounds(lat, lon) {
+        return Region::Europe;
+    }
+    Region::Unknown
 }
 
 /// Fetches air quality data from Open-Meteo Air Quality API
@@ -332,14 +364,12 @@ pub async fn fetch_air_quality(
     let response = reqwest::get(&url).await?;
     let data: AirQualityResponse = response.json().await?;
 
-    let use_european = is_european_location(latitude, longitude);
-    let (aqi, standard) = if use_european {
-        (
+    let (aqi, standard) = match detect_region(latitude, longitude) {
+        Region::Europe => (
             data.current.european_aqi.unwrap_or(0),
             AqiStandard::European,
-        )
-    } else {
-        (data.current.us_aqi.unwrap_or(0), AqiStandard::Us)
+        ),
+        _ => (data.current.us_aqi.unwrap_or(0), AqiStandard::Us),
     };
 
     Ok(AirQualityData {
@@ -484,18 +514,6 @@ pub async fn detect_location() -> Result<(f64, f64, String, String), Box<dyn std
 /// Only US, Liberia, and Myanmar officially use imperial.
 pub fn uses_imperial_units(country: &str) -> bool {
     matches!(country, "United States" | "Liberia" | "Myanmar")
-}
-
-/// Checks if coordinates fall within US territory (continental US, Alaska, Hawaii).
-fn is_us_coordinates(lat: f64, lon: f64) -> bool {
-    // Continental US: lat 24-49, lon -125 to -66
-    let continental = (24.0..=49.0).contains(&lat) && (-125.0..=-66.0).contains(&lon);
-    // Alaska: lat 51-72, lon -180 to -129
-    let alaska = (51.0..=72.0).contains(&lat) && (-180.0..=-129.0).contains(&lon);
-    // Hawaii: lat 18-23, lon -161 to -154
-    let hawaii = (18.0..=23.0).contains(&lat) && (-161.0..=-154.0).contains(&lon);
-
-    continental || alaska || hawaii
 }
 
 /// Maps country name to (MeteoAlarm feed slug, ISO country code).
@@ -663,7 +681,7 @@ async fn fetch_nws_alerts(
                 severity: props
                     .severity
                     .as_deref()
-                    .map(AlertSeverity::from_nws_string)
+                    .map(AlertSeverity::from_cap_string)
                     .unwrap_or(AlertSeverity::Unknown),
                 urgency: props.urgency.unwrap_or_else(|| "Unknown".to_string()),
                 headline: props.headline.unwrap_or_default(),
@@ -855,7 +873,7 @@ fn parse_meteoalarm_entry(entry: MeteoAlarmEntry, user_emma_id: &Option<String>)
     let severity = entry
         .cap_severity
         .as_deref()
-        .map(AlertSeverity::from_meteoalarm_string)
+        .map(AlertSeverity::from_cap_string)
         .unwrap_or(AlertSeverity::Unknown);
 
     Some(Alert {
@@ -873,24 +891,22 @@ fn parse_meteoalarm_entry(entry: MeteoAlarmEntry, user_emma_id: &Option<String>)
 }
 
 /// Fetches active weather alerts based on location.
-/// Dispatches to appropriate regional API (NWS for US, MeteoAlarm for EU).
+/// Dispatches to appropriate regional API based on detected region.
 pub async fn fetch_alerts(
     latitude: f64,
     longitude: f64,
 ) -> Result<Vec<Alert>, Box<dyn std::error::Error + Send + Sync>> {
-    if is_us_coordinates(latitude, longitude) {
-        return fetch_nws_alerts(latitude, longitude).await;
+    match detect_region(latitude, longitude) {
+        Region::Us => fetch_nws_alerts(latitude, longitude).await,
+        Region::Europe => {
+            let country = detect_country_from_coords(latitude, longitude)
+                .await
+                .unwrap_or_default();
+            fetch_meteoalarm_alerts(latitude, longitude, &country).await
+        }
+        Region::Canada => Ok(vec![]), // TODO: implement ECCC alerts
+        Region::Unknown => Ok(vec![]),
     }
-
-    if is_european_location(latitude, longitude) {
-        let country = detect_country_from_coords(latitude, longitude)
-            .await
-            .unwrap_or_default();
-        return fetch_meteoalarm_alerts(latitude, longitude, &country).await;
-    }
-
-    // No alert coverage for this region
-    Ok(vec![])
 }
 
 /// Converts WMO weather codes to human-readable descriptions
