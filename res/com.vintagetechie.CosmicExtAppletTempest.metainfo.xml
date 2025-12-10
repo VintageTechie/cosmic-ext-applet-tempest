@@ -24,7 +24,7 @@
       <li>Sunrise and sunset times with timezone support</li>
       <li>Air quality data with PM2.5, PM10, ozone, NO2, and CO readings</li>
       <li>Auto-detects US or European AQI standard based on location</li>
-      <li>Weather alerts for US (NWS) and European (MeteoAlarm) locations</li>
+      <li>Weather alerts for US (NWS), Canadian (ECCC), and European (MeteoAlarm) locations</li>
       <li>Hourly forecast for next 12 hours</li>
       <li>7-day forecast with high/low temperatures</li>
       <li>Auto-select temperature and measurement units based on location</li>
@@ -47,6 +47,16 @@
   </categories>
 
   <releases>
+    <release version="1.5.0" date="2025-12-10">
+      <description>
+        <p>Canadian weather alerts</p>
+        <ul>
+          <li>Weather alerts for Canadian locations via ECCC (Environment and Climate Change Canada)</li>
+          <li>Point-in-polygon filtering for precise alert matching</li>
+          <li>Improved US/Canada border region detection</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.1" date="2025-12-08">
       <description>
         <p>Alert details and updated screenshots</p>
