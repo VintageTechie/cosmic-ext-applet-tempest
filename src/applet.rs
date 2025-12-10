@@ -234,19 +234,18 @@ impl Application for Tempest {
         let temperature_text = text(&self.display_label);
 
         let has_alerts = !self.alerts.is_empty();
-        let alert_icon = widget::icon::from_name("weather-severe-alert-symbolic")
-            .size(14)
+        let alert_icon = widget::icon::from_name("dialog-warning-symbolic")
+            .size(18)
             .symbolic(true);
 
         let data = if self.core.applet.is_horizontal() {
             let mut row = widget::row()
-                .push(icon)
-                .push(temperature_text)
                 .align_y(Alignment::Center)
                 .spacing(4);
             if has_alerts {
                 row = row.push(alert_icon);
             }
+            row = row.push(icon).push(temperature_text);
             if let Some((aqi, _)) = self.current_aqi {
                 row = row.push(text("|").size(12));
                 row = row.push(text(format!("AQI {}", aqi)));
@@ -254,13 +253,12 @@ impl Application for Tempest {
             Element::from(row)
         } else {
             let mut col = widget::column()
-                .push(icon)
-                .push(temperature_text)
                 .align_x(Alignment::Center)
                 .spacing(4);
             if has_alerts {
                 col = col.push(alert_icon);
             }
+            col = col.push(icon).push(temperature_text);
             if let Some((aqi, _)) = self.current_aqi {
                 col = col.push(text(format!("AQI {}", aqi)).size(12));
             }
@@ -280,22 +278,55 @@ impl Application for Tempest {
             .padding(10)
             .width(cosmic::iced::Length::Fixed(420.0));
 
-        // Add header with location name and refresh button
-        let header = widget::row()
-            .spacing(10)
-            .push(text(&self.config.location_name).size(16))
+        // Header row with timestamp and action buttons
+        let has_alerts = !self.alerts.is_empty();
+        let alerts_icon = if has_alerts {
+            "dialog-warning-symbolic"
+        } else {
+            "weather-clear-symbolic"
+        };
+
+        let mut header = widget::row()
+            .spacing(8)
+            .align_y(cosmic::iced::Alignment::Center);
+
+        // Add timestamp if available
+        if let Some(ref formatted_time) = self.last_updated_display {
+            header = header.push(text(format!("Updated: {}", formatted_time)).size(12));
+        }
+
+        // Alert button - styled to stand out when alerts are active
+        let alerts_btn = widget::button::icon(widget::icon::from_name(alerts_icon))
+            .on_press(Message::SelectTab(PopupTab::Alerts))
+            .padding(6);
+        let alerts_btn = if has_alerts {
+            alerts_btn.class(cosmic::theme::Button::Destructive)
+        } else {
+            alerts_btn
+        };
+
+        header = header
             .push(widget::horizontal_space())
             .push(
                 widget::button::icon(widget::icon::from_name("view-refresh-symbolic"))
                     .on_press(Message::RefreshWeather)
-                    .padding(8),
+                    .padding(6),
+            )
+            .push(alerts_btn)
+            .push(
+                widget::button::icon(widget::icon::from_name("emblem-system-symbolic"))
+                    .on_press(Message::SelectTab(PopupTab::Settings))
+                    .padding(6),
             );
+
         column = column.push(header);
 
-        // Add last updated timestamp if available
-        if let Some(ref formatted_time) = self.last_updated_display {
-            column = column.push(text(format!("Updated: {}", formatted_time)).size(12));
-        }
+        // Prominent location display
+        column = column.push(
+            widget::container(text(&self.config.location_name).size(18))
+                .align_x(cosmic::iced::alignment::Horizontal::Center)
+                .width(cosmic::iced::Length::Fill),
+        );
 
         column = column.push(widget::divider::horizontal::default());
 
@@ -326,114 +357,42 @@ impl Application for Tempest {
                 .width(cosmic::iced::Length::Fill),
             );
         } else if let Some(ref weather) = self.weather_data {
-            // Current conditions
-            column = column.push(
-                widget::row()
-                    .spacing(10)
-                    .push(
-                        text(format!(
-                            "{:.0}{}",
-                            weather.current.temperature,
-                            self.config.temperature_unit.symbol()
-                        ))
-                        .size(32),
-                    )
-                    .push(text(weathercode_to_description(
-                        weather.current.weathercode,
-                    ))),
-            );
-
-            // Additional current conditions
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(
-                        text(format!(
-                            "Feels like: {:.0}{}",
-                            weather.current.feels_like,
-                            self.config.temperature_unit.symbol()
-                        ))
-                        .size(14),
-                    )
-                    .push(text(format!("Humidity: {}%", weather.current.humidity)).size(14)),
-            );
-
-            // Wind information
-            let wind_unit = self.config.measurement_system.wind_speed_unit();
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(
-                        text(format!(
-                            "Wind: {:.1} {} {}",
-                            weather.current.windspeed,
-                            wind_unit,
-                            wind_direction_to_compass(weather.current.wind_direction)
-                        ))
-                        .size(14),
-                    )
-                    .push(
-                        text(format!(
-                            "Gusts: {:.1} {}",
-                            weather.current.wind_gusts, wind_unit
-                        ))
-                        .size(14),
-                    ),
-            );
-
-            // Additional weather details
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(text(format!("UV Index: {:.1}", weather.current.uv_index)).size(14))
-                    .push(text(format!("Cloud Cover: {}%", weather.current.cloud_cover)).size(14)),
-            );
-
-            let visibility = self
-                .config
-                .measurement_system
-                .convert_visibility(weather.current.visibility);
-            let visibility_unit = self.config.measurement_system.visibility_unit();
-            column = column.push(
-                widget::row()
-                    .spacing(20)
-                    .push(
-                        text(format!("Visibility: {:.1} {}", visibility, visibility_unit)).size(14),
-                    )
-                    .push(text(format!("Pressure: {:.0} hPa", weather.current.pressure)).size(14)),
-            );
-
-            // Sunrise/Sunset for today
-            if let Some(first_day) = weather.forecast.first() {
-                column = column.push(
-                    widget::row()
-                        .spacing(20)
-                        .push(
-                            text(format!("Sunrise: {}", format_time(&first_day.sunrise))).size(14),
-                        )
-                        .push(text(format!("Sunset: {}", format_time(&first_day.sunset))).size(14)),
-                );
-            }
-
-            column = column.push(widget::divider::horizontal::default());
-
-            // Tab bar
+            // Tab bar - 4 tabs only (Alerts/Settings accessible via header buttons)
             let active = self.active_tab;
-            let air_btn = widget::button::text("Air").on_press(Message::SelectTab(PopupTab::AirQuality));
-            let alerts_btn = widget::button::text("Alerts").on_press(Message::SelectTab(PopupTab::Alerts));
-            let hourly_btn = widget::button::text("Hourly").on_press(Message::SelectTab(PopupTab::Hourly));
-            let forecast_btn = widget::button::text("7-Day").on_press(Message::SelectTab(PopupTab::Forecast));
-            let settings_btn = widget::button::text("Settings").on_press(Message::SelectTab(PopupTab::Settings));
+            let current_btn =
+                widget::button::text("Current").on_press(Message::SelectTab(PopupTab::Current));
+            let air_btn =
+                widget::button::text("Air").on_press(Message::SelectTab(PopupTab::AirQuality));
+            let hourly_btn =
+                widget::button::text("Hourly").on_press(Message::SelectTab(PopupTab::Hourly));
+            let forecast_btn =
+                widget::button::text("7-Day").on_press(Message::SelectTab(PopupTab::Forecast));
 
             let tab_bar = widget::row()
                 .spacing(8)
                 .align_y(cosmic::iced::Alignment::Center)
-                .push(if active == PopupTab::AirQuality { air_btn.class(cosmic::theme::Button::Suggested) } else { air_btn })
-                .push(if active == PopupTab::Alerts { alerts_btn.class(cosmic::theme::Button::Suggested) } else { alerts_btn })
-                .push(if active == PopupTab::Hourly { hourly_btn.class(cosmic::theme::Button::Suggested) } else { hourly_btn })
-                .push(if active == PopupTab::Forecast { forecast_btn.class(cosmic::theme::Button::Suggested) } else { forecast_btn })
-                .push(if active == PopupTab::Settings { settings_btn.class(cosmic::theme::Button::Suggested) } else { settings_btn });
+                .push(if active == PopupTab::Current {
+                    current_btn.class(cosmic::theme::Button::Suggested)
+                } else {
+                    current_btn
+                })
+                .push(if active == PopupTab::Hourly {
+                    hourly_btn.class(cosmic::theme::Button::Suggested)
+                } else {
+                    hourly_btn
+                })
+                .push(if active == PopupTab::Forecast {
+                    forecast_btn.class(cosmic::theme::Button::Suggested)
+                } else {
+                    forecast_btn
+                })
+                .push(if active == PopupTab::AirQuality {
+                    air_btn.class(cosmic::theme::Button::Suggested)
+                } else {
+                    air_btn
+                });
 
+            // Tab bar
             column = column.push(
                 widget::container(tab_bar)
                     .align_x(cosmic::iced::alignment::Horizontal::Center)
@@ -443,6 +402,112 @@ impl Application for Tempest {
 
             // Tab content
             match self.active_tab {
+                PopupTab::Current => {
+                    // Temperature and condition
+                    column = column.push(
+                        widget::row()
+                            .spacing(10)
+                            .push(
+                                text(format!(
+                                    "{:.0}{}",
+                                    weather.current.temperature,
+                                    self.config.temperature_unit.symbol()
+                                ))
+                                .size(32),
+                            )
+                            .push(text(weathercode_to_description(
+                                weather.current.weathercode,
+                            ))),
+                    );
+
+                    // Feels like and humidity
+                    column = column.push(
+                        widget::row()
+                            .spacing(20)
+                            .push(
+                                text(format!(
+                                    "Feels like: {:.0}{}",
+                                    weather.current.feels_like,
+                                    self.config.temperature_unit.symbol()
+                                ))
+                                .size(14),
+                            )
+                            .push(
+                                text(format!("Humidity: {}%", weather.current.humidity)).size(14),
+                            ),
+                    );
+
+                    // Wind information
+                    let wind_unit = self.config.measurement_system.wind_speed_unit();
+                    column = column.push(
+                        widget::row()
+                            .spacing(20)
+                            .push(
+                                text(format!(
+                                    "Wind: {:.1} {} {}",
+                                    weather.current.windspeed,
+                                    wind_unit,
+                                    wind_direction_to_compass(weather.current.wind_direction)
+                                ))
+                                .size(14),
+                            )
+                            .push(
+                                text(format!(
+                                    "Gusts: {:.1} {}",
+                                    weather.current.wind_gusts, wind_unit
+                                ))
+                                .size(14),
+                            ),
+                    );
+
+                    // UV and cloud cover
+                    column = column.push(
+                        widget::row()
+                            .spacing(20)
+                            .push(
+                                text(format!("UV Index: {:.1}", weather.current.uv_index)).size(14),
+                            )
+                            .push(
+                                text(format!("Cloud Cover: {}%", weather.current.cloud_cover))
+                                    .size(14),
+                            ),
+                    );
+
+                    // Visibility and pressure
+                    let visibility = self
+                        .config
+                        .measurement_system
+                        .convert_visibility(weather.current.visibility);
+                    let visibility_unit = self.config.measurement_system.visibility_unit();
+                    column = column.push(
+                        widget::row()
+                            .spacing(20)
+                            .push(
+                                text(format!("Visibility: {:.1} {}", visibility, visibility_unit))
+                                    .size(14),
+                            )
+                            .push(
+                                text(format!("Pressure: {:.0} hPa", weather.current.pressure))
+                                    .size(14),
+                            ),
+                    );
+
+                    // Sunrise/Sunset
+                    if let Some(first_day) = weather.forecast.first() {
+                        column = column.push(
+                            widget::row()
+                                .spacing(20)
+                                .push(
+                                    text(format!("Sunrise: {}", format_time(&first_day.sunrise)))
+                                        .size(14),
+                                )
+                                .push(
+                                    text(format!("Sunset: {}", format_time(&first_day.sunset)))
+                                        .size(14),
+                                ),
+                        );
+                    }
+                }
                 PopupTab::AirQuality => {
                     if let Some(ref aq) = self.air_quality {
                         let label = aqi_standard_label(aq.standard);
@@ -560,18 +625,22 @@ impl Application for Tempest {
                     }
                 }
                 PopupTab::Hourly => {
-                    for hour in &weather.hourly {
-                        column = column.push(
-                            widget::container(
-                                widget::row()
-                                    .spacing(10)
-                                    .push(text(format_hour(&hour.time)).width(100))
+                    // 4-column grid layout for hourly forecast
+                    let hours_per_row = 4;
+                    for chunk in weather.hourly.chunks(hours_per_row) {
+                        let mut row = widget::row().spacing(8);
+
+                        for hour in chunk {
+                            let cell = widget::column()
+                                .spacing(4)
+                                .align_x(cosmic::iced::alignment::Horizontal::Center)
+                                .push(text(format_hour(&hour.time)).size(12))
                                 .push(
                                     widget::icon::from_name(weathercode_to_icon_name(
                                         hour.weathercode,
                                         false,
                                     ))
-                                    .size(16)
+                                    .size(20)
                                     .symbolic(true),
                                 )
                                 .push(
@@ -580,34 +649,93 @@ impl Application for Tempest {
                                         hour.temperature,
                                         self.config.temperature_unit.symbol()
                                     ))
-                                    .width(70),
+                                    .size(14),
                                 )
                                 .push(
-                                    text(format!("{}%", hour.precipitation_probability)).width(60),
-                                ),
-                            )
-                            .align_x(cosmic::iced::alignment::Horizontal::Center)
-                            .width(cosmic::iced::Length::Fill),
-                        );
+                                    text(format!("{}%", hour.precipitation_probability)).size(11),
+                                );
+
+                            row = row.push(
+                                widget::container(cell)
+                                    .width(cosmic::iced::Length::FillPortion(1))
+                                    .align_x(cosmic::iced::alignment::Horizontal::Center),
+                            );
+                        }
+
+                        // Pad incomplete rows with empty space
+                        for _ in chunk.len()..hours_per_row {
+                            row = row.push(
+                                widget::container(widget::Space::new(0, 0))
+                                    .width(cosmic::iced::Length::FillPortion(1)),
+                            );
+                        }
+
+                        column = column.push(row);
                     }
                 }
                 PopupTab::Forecast => {
+                    // Table header
+                    column = column.push(
+                        widget::row()
+                            .spacing(8)
+                            .push(
+                                text("Day")
+                                    .size(12)
+                                    .width(cosmic::iced::Length::Fixed(80.0)),
+                            )
+                            .push(widget::Space::new(24, 0))
+                            .push(
+                                text("High")
+                                    .size(12)
+                                    .width(cosmic::iced::Length::Fixed(45.0)),
+                            )
+                            .push(
+                                text("Low")
+                                    .size(12)
+                                    .width(cosmic::iced::Length::Fixed(45.0)),
+                            )
+                            .push(text("Conditions").size(12)),
+                    );
+                    column = column.push(widget::divider::horizontal::default());
+
+                    // Data rows
                     for day in &weather.forecast {
                         column = column.push(
                             widget::row()
-                                .spacing(10)
-                                .push(text(format_date(&day.date)).width(90))
+                                .spacing(8)
+                                .align_y(cosmic::iced::Alignment::Center)
+                                .push(
+                                    text(format_date(&day.date))
+                                        .size(13)
+                                        .width(cosmic::iced::Length::Fixed(80.0)),
+                                )
                                 .push(
                                     widget::icon::from_name(weathercode_to_icon_name(
                                         day.weathercode,
                                         false,
                                     ))
-                                    .size(16)
+                                    .size(20)
                                     .symbolic(true),
                                 )
-                                .push(text(format!("{:.0}", day.temp_max)).width(35))
-                                .push(text(format!("{:.0}", day.temp_min)).width(35))
-                                .push(text(weathercode_to_description(day.weathercode))),
+                                .push(
+                                    text(format!(
+                                        "{:.0}{}",
+                                        day.temp_max,
+                                        self.config.temperature_unit.symbol()
+                                    ))
+                                    .size(13)
+                                    .width(cosmic::iced::Length::Fixed(45.0)),
+                                )
+                                .push(
+                                    text(format!(
+                                        "{:.0}{}",
+                                        day.temp_min,
+                                        self.config.temperature_unit.symbol()
+                                    ))
+                                    .size(13)
+                                    .width(cosmic::iced::Length::Fixed(45.0)),
+                                )
+                                .push(text(weathercode_to_description(day.weathercode)).size(12)),
                         );
                     }
                 }
@@ -726,15 +854,16 @@ impl Application for Tempest {
                     ));
                 }
             }
+
         }
 
         let scrollable = widget::scrollable(column).height(cosmic::iced::Length::Fill);
 
         let popup_limits = Limits::NONE
-            .min_width(480.0)
-            .max_width(480.0)
-            .min_height(200.0)
-            .max_height(800.0);
+            .min_width(440.0)
+            .max_width(440.0)
+            .min_height(180.0)
+            .max_height(550.0);
 
         self.core.applet.popup_container(scrollable).limits(popup_limits).into()
     }
@@ -760,8 +889,8 @@ impl Application for Tempest {
                     popup_settings.positioner.size_limits = Limits::NONE
                         .min_width(440.0)
                         .max_width(440.0)
-                        .min_height(200.0)
-                        .max_height(800.0);
+                        .min_height(180.0)
+                        .max_height(550.0);
                     get_popup(popup_settings)
                 }
             }

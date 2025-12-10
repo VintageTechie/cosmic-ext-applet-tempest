@@ -47,6 +47,19 @@
   </categories>
 
   <releases>
+    <release version="1.6.0" date="2025-12-10">
+      <description>
+        <p>UI/UX improvements for better layout on smaller screens</p>
+        <ul>
+          <li>Current weather moved to dedicated tab for reduced popup height</li>
+          <li>Hourly forecast now displays in 4-column grid layout</li>
+          <li>7-day forecast uses table layout with header row</li>
+          <li>Tab order changed to Current, Hourly, 7-Day, Air</li>
+          <li>Alert indicator more prominent with warning icon and destructive styling</li>
+          <li>Popup max height reduced to fit 768p screens</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.5.0" date="2025-12-10">
       <description>
         <p>Canadian weather alerts</p>
@@ -153,12 +166,16 @@
       <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-main.png</image>
     </screenshot>
     <screenshot>
-      <caption>Air quality information</caption>
-      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-aiq.png</image>
+      <caption>Hourly forecast</caption>
+      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-hourly.png</image>
     </screenshot>
     <screenshot>
       <caption>7-day weather forecast</caption>
       <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-7day.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Air quality information</caption>
+      <image>https://raw.githubusercontent.com/VintageTechie/cosmic-ext-applet-tempest/main/screenshots/tempest-aiq.png</image>
     </screenshot>
     <screenshot>
       <caption>Weather alerts</caption>
