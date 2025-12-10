@@ -58,6 +58,8 @@ pub struct Tempest {
     error_message: Option<String>,
     /// Active tab in the popup
     active_tab: PopupTab,
+    /// Cached formatted timestamp for display (avoids recomputing on every render)
+    last_updated_display: Option<String>,
 }
 
 impl Default for Tempest {
@@ -79,6 +81,7 @@ impl Default for Tempest {
             is_loading: true,
             error_message: None,
             active_tab: PopupTab::default(),
+            last_updated_display: None,
             config,
             config_handler: None,
         }
@@ -290,16 +293,8 @@ impl Application for Tempest {
         column = column.push(header);
 
         // Add last updated timestamp if available
-        if let Some(timestamp) = self.config.last_updated {
-            if let Some(datetime) = chrono::DateTime::from_timestamp(timestamp, 0) {
-                let local_time: chrono::DateTime<chrono::Local> = datetime.into();
-                let formatted_time = local_time
-                    .format("%I:%M %p")
-                    .to_string()
-                    .trim_start_matches('0')
-                    .to_string();
-                column = column.push(text(format!("Updated: {}", formatted_time)).size(12));
-            }
+        if let Some(ref formatted_time) = self.last_updated_display {
+            column = column.push(text(format!("Updated: {}", formatted_time)).size(12));
         }
 
         column = column.push(widget::divider::horizontal::default());
@@ -831,8 +826,15 @@ impl Application for Tempest {
                         self.weather_data = Some(data);
                         self.error_message = None;
 
-                        // Update last updated timestamp
-                        self.config.last_updated = Some(chrono::Local::now().timestamp());
+                        // Update last updated timestamp and cache formatted display
+                        let now = chrono::Local::now();
+                        self.config.last_updated = Some(now.timestamp());
+                        self.last_updated_display = Some(
+                            now.format("%I:%M %p")
+                                .to_string()
+                                .trim_start_matches('0')
+                                .to_string(),
+                        );
                         self.save_config();
                     }
                     Err(e) => {
