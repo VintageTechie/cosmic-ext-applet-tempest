@@ -120,6 +120,9 @@ pub struct Config {
     /// Automatically select units based on detected location.
     #[serde(default = "default_auto_units")]
     pub auto_units: bool,
+    /// Show AQI in the panel display.
+    #[serde(default = "default_show_aqi_in_panel")]
+    pub show_aqi_in_panel: bool,
 }
 
 fn default_alerts_enabled() -> bool {
@@ -127,6 +130,10 @@ fn default_alerts_enabled() -> bool {
 }
 
 fn default_auto_units() -> bool {
+    true
+}
+
+fn default_show_aqi_in_panel() -> bool {
     true
 }
 
@@ -147,6 +154,7 @@ impl Default for Config {
             default_tab: PopupTab::default(),
             alerts_enabled: true,
             auto_units: true,
+            show_aqi_in_panel: true,
         }
     }
 }
