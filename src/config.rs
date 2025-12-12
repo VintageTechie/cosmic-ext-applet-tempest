@@ -32,6 +32,11 @@ impl TemperatureUnit {
             Self::Celsius => "celsius",
         }
     }
+
+    /// Formats a temperature value with the unit symbol.
+    pub fn format(&self, temp: f32) -> String {
+        format!("{:.0}{}", temp, self.symbol())
+    }
 }
 
 /// Tab options for the popup interface.

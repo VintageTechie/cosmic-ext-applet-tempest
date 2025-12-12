@@ -24,7 +24,7 @@ A weather applet for COSMIC Desktop with automatic location detection.
   - UV index, cloud cover, visibility, pressure
   - Sunrise and sunset times
   - **Air Quality tab**: AQI (US/EU standards), PM2.5, PM10, Ozone, NO2, CO levels
-  - **Alerts tab**: Weather alerts from NWS (US locations only)
+  - **Alerts tab**: Weather alerts from NWS (US), ECCC (Canada), MeteoAlarm (EU)
   - **Hourly tab**: Next 12 hours forecast with precipitation probability
   - **7-Day tab**: Weekly forecast with high/low temperatures
   - **Settings tab**: All configuration options
@@ -70,7 +70,8 @@ Click the applet to open the popup and navigate to the Settings tab where you ca
 - Toggle temperature unit (Fahrenheit/Celsius)
 - Toggle measurement system (Imperial/Metric)
 - Set refresh interval (1-1440 minutes)
-- Enable or disable weather alerts (US locations only)
+- Enable or disable weather alerts
+- Toggle AQI display in panel
 
 Settings are automatically saved and persist across sessions. The applet defaults to New York City coordinates (40.7128, -74.0060) if no location is detected.
 

@@ -47,6 +47,16 @@
   </categories>
 
   <releases>
+    <release version="1.6.1" date="2025-12-12">
+      <description>
+        <p>Panel AQI toggle and code improvements</p>
+        <ul>
+          <li>Added toggle to show/hide AQI in panel display</li>
+          <li>Internal refactoring for improved maintainability</li>
+          <li>Shared HTTP client for better connection pooling</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.6.0" date="2025-12-10">
       <description>
         <p>UI/UX improvements for better layout on smaller screens</p>

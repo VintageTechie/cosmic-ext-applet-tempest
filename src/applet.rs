@@ -363,39 +363,13 @@ impl Application for Tempest {
             );
         } else if let Some(ref weather) = self.weather_data {
             // Tab bar - 4 tabs only (Alerts/Settings accessible via header buttons)
-            let active = self.active_tab;
-            let current_btn =
-                widget::button::text("Current").on_press(Message::SelectTab(PopupTab::Current));
-            let air_btn =
-                widget::button::text("Air").on_press(Message::SelectTab(PopupTab::AirQuality));
-            let hourly_btn =
-                widget::button::text("Hourly").on_press(Message::SelectTab(PopupTab::Hourly));
-            let forecast_btn =
-                widget::button::text("7-Day").on_press(Message::SelectTab(PopupTab::Forecast));
-
             let tab_bar = widget::row()
                 .spacing(8)
                 .align_y(cosmic::iced::Alignment::Center)
-                .push(if active == PopupTab::Current {
-                    current_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    current_btn
-                })
-                .push(if active == PopupTab::Hourly {
-                    hourly_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    hourly_btn
-                })
-                .push(if active == PopupTab::Forecast {
-                    forecast_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    forecast_btn
-                })
-                .push(if active == PopupTab::AirQuality {
-                    air_btn.class(cosmic::theme::Button::Suggested)
-                } else {
-                    air_btn
-                });
+                .push(self.tab_button("Current", PopupTab::Current))
+                .push(self.tab_button("Hourly", PopupTab::Hourly))
+                .push(self.tab_button("7-Day", PopupTab::Forecast))
+                .push(self.tab_button("Air", PopupTab::AirQuality));
 
             // Tab bar
             column = column.push(
@@ -413,12 +387,8 @@ impl Application for Tempest {
                         widget::row()
                             .spacing(10)
                             .push(
-                                text(format!(
-                                    "{:.0}{}",
-                                    weather.current.temperature,
-                                    self.config.temperature_unit.symbol()
-                                ))
-                                .size(32),
+                                text(self.config.temperature_unit.format(weather.current.temperature))
+                                    .size(32),
                             )
                             .push(text(weathercode_to_description(
                                 weather.current.weathercode,
@@ -649,12 +619,8 @@ impl Application for Tempest {
                                     .symbolic(true),
                                 )
                                 .push(
-                                    text(format!(
-                                        "{:.0}{}",
-                                        hour.temperature,
-                                        self.config.temperature_unit.symbol()
-                                    ))
-                                    .size(14),
+                                    text(self.config.temperature_unit.format(hour.temperature))
+                                        .size(14),
                                 )
                                 .push(
                                     text(format!("{}%", hour.precipitation_probability)).size(11),
@@ -723,22 +689,14 @@ impl Application for Tempest {
                                     .symbolic(true),
                                 )
                                 .push(
-                                    text(format!(
-                                        "{:.0}{}",
-                                        day.temp_max,
-                                        self.config.temperature_unit.symbol()
-                                    ))
-                                    .size(13)
-                                    .width(cosmic::iced::Length::Fixed(45.0)),
+                                    text(self.config.temperature_unit.format(day.temp_max))
+                                        .size(13)
+                                        .width(cosmic::iced::Length::Fixed(45.0)),
                                 )
                                 .push(
-                                    text(format!(
-                                        "{:.0}{}",
-                                        day.temp_min,
-                                        self.config.temperature_unit.symbol()
-                                    ))
-                                    .size(13)
-                                    .width(cosmic::iced::Length::Fixed(45.0)),
+                                    text(self.config.temperature_unit.format(day.temp_min))
+                                        .size(13)
+                                        .width(cosmic::iced::Length::Fixed(45.0)),
                                 )
                                 .push(text(weathercode_to_description(day.weathercode)).size(12)),
                         );
@@ -870,13 +828,11 @@ impl Application for Tempest {
 
         let scrollable = widget::scrollable(column).height(cosmic::iced::Length::Fill);
 
-        let popup_limits = Limits::NONE
-            .min_width(440.0)
-            .max_width(440.0)
-            .min_height(180.0)
-            .max_height(550.0);
-
-        self.core.applet.popup_container(scrollable).limits(popup_limits).into()
+        self.core
+            .applet
+            .popup_container(scrollable)
+            .limits(Self::popup_limits())
+            .into()
     }
 
     /// Application messages are handled here. The application state can be modified based on
@@ -897,11 +853,7 @@ impl Application for Tempest {
                         None,
                         None,
                     );
-                    popup_settings.positioner.size_limits = Limits::NONE
-                        .min_width(440.0)
-                        .max_width(440.0)
-                        .min_height(180.0)
-                        .max_height(550.0);
+                    popup_settings.positioner.size_limits = Self::popup_limits();
                     get_popup(popup_settings)
                 }
             }
@@ -957,12 +909,8 @@ impl Application for Tempest {
                 match result {
                     Ok(data) => {
                         self.current_weathercode = data.current.weathercode;
-                        let temp = format!(
-                            "{:.0}{}",
-                            data.current.temperature,
-                            self.config.temperature_unit.symbol()
-                        );
-                        self.display_label = temp;
+                        self.display_label =
+                            self.config.temperature_unit.format(data.current.temperature);
                         self.weather_data = Some(data);
                         self.error_message = None;
 
@@ -1070,6 +1018,7 @@ impl Application for Tempest {
             },
             Message::SelectLocation(idx) => {
                 if let Some(location) = self.search_results.get(idx) {
+                    let country = location.country.clone();
                     self.config.latitude = location.latitude;
                     self.config.longitude = location.longitude;
                     self.config.location_name = location.display_name.clone();
@@ -1079,15 +1028,7 @@ impl Application for Tempest {
                     self.config.manual_longitude = Some(location.longitude);
                     self.config.manual_location_name = Some(location.display_name.clone());
 
-                    if self.config.auto_units {
-                        if uses_imperial_units(&location.country) {
-                            self.config.temperature_unit = TemperatureUnit::Fahrenheit;
-                            self.config.measurement_system = MeasurementSystem::Imperial;
-                        } else {
-                            self.config.temperature_unit = TemperatureUnit::Celsius;
-                            self.config.measurement_system = MeasurementSystem::Metric;
-                        }
-                    }
+                    self.apply_units_for_country(&country);
 
                     self.city_input.clear();
                     self.search_results.clear();
@@ -1146,15 +1087,7 @@ impl Application for Tempest {
                     self.config.longitude = lon;
                     self.config.location_name = location_name;
 
-                    if self.config.auto_units {
-                        if uses_imperial_units(&country) {
-                            self.config.temperature_unit = TemperatureUnit::Fahrenheit;
-                            self.config.measurement_system = MeasurementSystem::Imperial;
-                        } else {
-                            self.config.temperature_unit = TemperatureUnit::Celsius;
-                            self.config.measurement_system = MeasurementSystem::Metric;
-                        }
-                    }
+                    self.apply_units_for_country(&country);
 
                     self.save_config();
                     return Task::perform(async { Message::RefreshWeather }, Action::App);
@@ -1209,6 +1142,38 @@ impl Tempest {
             .show()
         {
             eprintln!("Failed to send alert notification: {}", e);
+        }
+    }
+
+    /// Creates a tab button, highlighted if it matches the active tab.
+    fn tab_button(&self, label: &'static str, tab: PopupTab) -> Element<'_, Message> {
+        let btn = widget::button::text(label).on_press(Message::SelectTab(tab));
+        if self.active_tab == tab {
+            btn.class(cosmic::theme::Button::Suggested).into()
+        } else {
+            btn.into()
+        }
+    }
+
+    /// Returns the size limits for the popup window.
+    fn popup_limits() -> Limits {
+        Limits::NONE
+            .min_width(440.0)
+            .max_width(440.0)
+            .min_height(180.0)
+            .max_height(550.0)
+    }
+
+    /// Sets temperature and measurement units based on country if auto_units is enabled.
+    fn apply_units_for_country(&mut self, country: &str) {
+        if self.config.auto_units {
+            if uses_imperial_units(country) {
+                self.config.temperature_unit = TemperatureUnit::Fahrenheit;
+                self.config.measurement_system = MeasurementSystem::Imperial;
+            } else {
+                self.config.temperature_unit = TemperatureUnit::Celsius;
+                self.config.measurement_system = MeasurementSystem::Metric;
+            }
         }
     }
 }

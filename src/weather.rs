@@ -2,6 +2,21 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
+
+const USER_AGENT: &str =
+    "(cosmic-ext-applet-tempest, https://github.com/VintageTechie/cosmic-ext-applet-tempest)";
+
+/// Shared HTTP client for connection pooling and consistent headers.
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .build()
+            .expect("failed to build HTTP client")
+    })
+}
 
 /// Current weather conditions
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -306,7 +321,7 @@ pub async fn fetch_weather(
         latitude, longitude, temperature_unit, windspeed_unit
     );
 
-    let response = reqwest::get(&url).await?;
+    let response = http_client().get(&url).send().await?;
     let data: OpenMeteoResponse = response.json().await?;
 
     // Process hourly forecast (limit to 12 hours)
@@ -424,7 +439,7 @@ pub async fn fetch_air_quality(
         latitude, longitude
     );
 
-    let response = reqwest::get(&url).await?;
+    let response = http_client().get(&url).send().await?;
     let data: AirQualityResponse = response.json().await?;
 
     let (aqi, standard) = match detect_region(latitude, longitude) {
@@ -526,7 +541,7 @@ pub async fn search_city(
         urlencoding::encode(city_name)
     );
 
-    let response = reqwest::get(&url).await?;
+    let response = http_client().get(&url).send().await?;
     let data: GeocodingResponse = response.json().await?;
 
     if let Some(results) = data.results {
@@ -549,7 +564,7 @@ pub async fn search_city(
 pub async fn detect_location() -> Result<(f64, f64, String, String), Box<dyn std::error::Error>> {
     let url = "http://ip-api.com/json/?fields=status,lat,lon,city,regionName,country";
 
-    let response = reqwest::get(url).await?;
+    let response = http_client().get(url).send().await?;
     let data: IpApiResponse = response.json().await?;
 
     if data.status == "success" {
@@ -635,7 +650,7 @@ async fn detect_country_from_coords(
         latitude, longitude
     );
 
-    let response = reqwest::get(&url).await;
+    let response = http_client().get(&url).send().await;
     if let Ok(resp) = response {
         if let Ok(data) = resp.json::<GeocodingResponse>().await {
             if let Some(results) = data.results {
@@ -700,13 +715,8 @@ async fn fetch_nws_alerts(
         latitude, longitude
     );
 
-    let client = reqwest::Client::new();
-    let response = client
+    let response = http_client()
         .get(&url)
-        .header(
-            "User-Agent",
-            "(cosmic-ext-applet-tempest, https://github.com/VintageTechie/cosmic-ext-applet-tempest)",
-        )
         .header("Accept", "application/geo+json")
         .send()
         .await?;
@@ -773,13 +783,8 @@ async fn resolve_user_emma_id(
         latitude, longitude
     );
 
-    let client = reqwest::Client::new();
-    let response = client
+    let response = http_client()
         .get(&nominatim_url)
-        .header(
-            "User-Agent",
-            "(cosmic-ext-applet-tempest, https://github.com/VintageTechie/cosmic-ext-applet-tempest)",
-        )
         .send()
         .await
         .ok()?;
@@ -808,7 +813,7 @@ async fn resolve_user_emma_id(
     // Fetch MeteoAlarm codenames
     let codenames_url =
         "https://raw.githubusercontent.com/ktrue/Meteoalarm-warning/master/meteoalarm-codenames.json";
-    let codenames_response = reqwest::get(codenames_url).await.ok()?;
+    let codenames_response = http_client().get(codenames_url).send().await.ok()?;
     let codenames: MeteoAlarmCodenames = codenames_response.json().await.ok()?;
 
     // Find matching EMMA_ID for this country
@@ -861,7 +866,7 @@ async fn fetch_meteoalarm_alerts(
         slug
     );
 
-    let response = reqwest::get(&url).await?;
+    let response = http_client().get(&url).send().await?;
     if !response.status().is_success() {
         return Err(format!("MeteoAlarm returned status: {}", response.status()).into());
     }
@@ -1052,7 +1057,7 @@ async fn fetch_eccc_alerts(
 ) -> Result<Vec<Alert>, Box<dyn std::error::Error + Send + Sync>> {
     let offices = get_eccc_office_codes(latitude, longitude);
     let today = chrono::Utc::now().format("%Y%m%d").to_string();
-    let client = reqwest::Client::new();
+    let client = http_client();
 
     let mut all_alerts: Vec<Alert> = Vec::new();
     let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
