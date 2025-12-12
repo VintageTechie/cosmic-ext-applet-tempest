@@ -100,6 +100,7 @@ pub enum Message {
     Tick,
     ToggleTemperatureUnit,
     ToggleAlertsEnabled,
+    ToggleShowAqiInPanel,
     ToggleAutoUnits,
     UpdateCityInput(String),
     SearchCity,
@@ -246,9 +247,11 @@ impl Application for Tempest {
                 row = row.push(alert_icon);
             }
             row = row.push(icon).push(temperature_text);
-            if let Some((aqi, _)) = self.current_aqi {
-                row = row.push(text("|").size(12));
-                row = row.push(text(format!("AQI {}", aqi)));
+            if self.config.show_aqi_in_panel {
+                if let Some((aqi, _)) = self.current_aqi {
+                    row = row.push(text("|").size(12));
+                    row = row.push(text(format!("AQI {}", aqi)));
+                }
             }
             Element::from(row)
         } else {
@@ -259,8 +262,10 @@ impl Application for Tempest {
                 col = col.push(alert_icon);
             }
             col = col.push(icon).push(temperature_text);
-            if let Some((aqi, _)) = self.current_aqi {
-                col = col.push(text(format!("AQI {}", aqi)).size(12));
+            if self.config.show_aqi_in_panel {
+                if let Some((aqi, _)) = self.current_aqi {
+                    col = col.push(text(format!("AQI {}", aqi)).size(12));
+                }
             }
             Element::from(col)
         };
@@ -838,6 +843,12 @@ impl Application for Tempest {
                             .push(text("US & EU").size(11)),
                     ));
 
+                    column = column.push(settings::item(
+                        "Show AQI in Panel",
+                        widget::toggler(self.config.show_aqi_in_panel)
+                            .on_toggle(|_| Message::ToggleShowAqiInPanel),
+                    ));
+
                     column = column.push(widget::divider::horizontal::default());
 
                     // About section
@@ -1027,6 +1038,10 @@ impl Application for Tempest {
                 }
                 self.save_config();
                 return Task::perform(async { Message::RefreshWeather }, Action::App);
+            }
+            Message::ToggleShowAqiInPanel => {
+                self.config.show_aqi_in_panel = !self.config.show_aqi_in_panel;
+                self.save_config();
             }
             Message::ToggleAutoUnits => {
                 self.config.auto_units = !self.config.auto_units;
