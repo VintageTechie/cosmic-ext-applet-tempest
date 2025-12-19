@@ -8,6 +8,9 @@ description = "Weather applet for COSMIC Desktop with automatic location detecti
 
 [dependencies]
 async-stream = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-log = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 i18n-embed-fl = "0.9.1"
 open = "5.3.0"

@@ -926,7 +926,7 @@ impl Application for Tempest {
                         self.save_config();
                     }
                     Err(e) => {
-                        eprintln!("Failed to fetch weather: {}", e);
+                        tracing::error!("Failed to fetch weather: {}", e);
                         self.display_label = "ERR".to_string();
                         self.current_weathercode = 0;
                         self.error_message = Some(e);
@@ -939,7 +939,7 @@ impl Application for Tempest {
                     self.air_quality = Some(data);
                 }
                 Err(e) => {
-                    eprintln!("Failed to fetch air quality: {}", e);
+                    tracing::warn!("Failed to fetch air quality: {}", e);
                     self.current_aqi = None;
                     self.air_quality = None;
                 }
@@ -956,7 +956,7 @@ impl Application for Tempest {
                     self.alerts = new_alerts;
                 }
                 Err(e) => {
-                    eprintln!("Failed to fetch alerts: {}", e);
+                    tracing::warn!("Failed to fetch alerts: {}", e);
                 }
             },
             Message::Tick => {
@@ -1012,7 +1012,7 @@ impl Application for Tempest {
                     self.search_results = results;
                 }
                 Err(e) => {
-                    eprintln!("City search failed: {}", e);
+                    tracing::warn!("City search failed: {}", e);
                     self.search_results.clear();
                 }
             },
@@ -1093,7 +1093,7 @@ impl Application for Tempest {
                     return Task::perform(async { Message::RefreshWeather }, Action::App);
                 }
                 Err(e) => {
-                    eprintln!("Failed to detect location: {}", e);
+                    tracing::error!("Failed to detect location: {}", e);
                 }
             },
             Message::SelectTab(tab) => {
@@ -1103,7 +1103,7 @@ impl Application for Tempest {
             }
             Message::OpenUrl(url) => {
                 if let Err(e) = open::that(&url) {
-                    eprintln!("Failed to open URL {}: {}", url, e);
+                    tracing::error!("Failed to open URL {}: {}", url, e);
                 }
             }
         }
@@ -1119,7 +1119,7 @@ impl Tempest {
     fn save_config(&self) {
         if let Some(ref handler) = self.config_handler {
             if let Err(e) = self.config.write_entry(handler) {
-                eprintln!("Failed to save config: {}", e);
+                tracing::error!("Failed to save config: {}", e);
             }
         }
     }
@@ -1141,7 +1141,7 @@ impl Tempest {
             .urgency(urgency)
             .show()
         {
-            eprintln!("Failed to send alert notification: {}", e);
+            tracing::warn!("Failed to send alert notification: {}", e);
         }
     }
 

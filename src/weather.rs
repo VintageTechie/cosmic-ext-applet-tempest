@@ -551,7 +551,7 @@ pub async fn search_city(
                 .map(LocationResult::from_geocoding_result)
                 .collect();
 
-            eprintln!("Found {} location(s) for '{}'", locations.len(), city_name);
+            tracing::debug!("Found {} location(s) for '{}'", locations.len(), city_name);
             return Ok(locations);
         }
     }
@@ -577,7 +577,7 @@ pub async fn detect_location() -> Result<(f64, f64, String, String), Box<dyn std
                 _ => "Unknown".to_string(),
             };
 
-            eprintln!(
+            tracing::debug!(
                 "Auto-detected location: {}, {} ({})",
                 lat, lon, location_name
             );
@@ -767,7 +767,7 @@ async fn fetch_nws_alerts(
         })
         .collect();
 
-    eprintln!("Fetched {} active alert(s) from NWS", alerts.len());
+    tracing::debug!("Fetched {} alert(s) from NWS", alerts.len());
     Ok(alerts)
 }
 
@@ -828,7 +828,7 @@ async fn resolve_user_emma_id(
             if name.to_lowercase().contains(&search_lower)
                 || search_lower.contains(&name.to_lowercase())
             {
-                eprintln!(
+                tracing::debug!(
                     "Resolved EMMA_ID: {} ({}) for search term '{}'",
                     emma_id, name, search_term
                 );
@@ -837,7 +837,7 @@ async fn resolve_user_emma_id(
         }
     }
 
-    eprintln!(
+    tracing::debug!(
         "Could not resolve EMMA_ID for location: {:?}",
         search_terms.first()
     );
@@ -853,7 +853,7 @@ async fn fetch_meteoalarm_alerts(
     let (slug, country_code) = match get_meteoalarm_info(country) {
         Some(info) => info,
         None => {
-            eprintln!("Country '{}' not covered by MeteoAlarm", country);
+            tracing::debug!("Country '{}' not covered by MeteoAlarm", country);
             return Ok(vec![]);
         }
     };
@@ -880,11 +880,7 @@ async fn fetch_meteoalarm_alerts(
         .filter_map(|entry| parse_meteoalarm_entry(entry, &user_emma_id))
         .collect();
 
-    eprintln!(
-        "Fetched {} active alert(s) from MeteoAlarm ({})",
-        alerts.len(),
-        country
-    );
+    tracing::debug!("Fetched {} alert(s) from MeteoAlarm ({})", alerts.len(), country);
     Ok(alerts)
 }
 
@@ -1148,7 +1144,7 @@ async fn fetch_eccc_alerts(
         }
     }
 
-    eprintln!("Fetched {} active alert(s) from ECCC", all_alerts.len());
+    tracing::debug!("Fetched {} alert(s) from ECCC", all_alerts.len());
     Ok(all_alerts)
 }
 
