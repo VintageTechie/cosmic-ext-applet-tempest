@@ -798,7 +798,7 @@ impl Application for Tempest {
                                 widget::toggler(self.config.alerts_enabled)
                                     .on_toggle(|_| Message::ToggleAlertsEnabled),
                             )
-                            .push(text("US & EU").size(11)),
+                            .push(text("US, Canada & Europe").size(11)),
                     ));
 
                     column = column.push(settings::item(
