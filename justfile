@@ -35,7 +35,7 @@ run *args:
 
 # Run with debug logs
 run-logs *args:
-    env RUST_LOG=cosmic_tasks=info RUST_BACKTRACE=full cargo run --release {{args}}
+    env RUST_LOG=cosmic_ext_applet_tempest=debug RUST_BACKTRACE=full cargo run --release {{args}}
 
 spellcheck *args:
 	@codespell --skip="./i18n" --skip="./.git" --skip="./target" --builtin clear,rare,informal,code --ignore-words-list mut,crate {{args}}
