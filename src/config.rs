@@ -151,7 +151,7 @@ impl Default for Config {
             temperature_unit: TemperatureUnit::default(),
             measurement_system: MeasurementSystem::default(),
             refresh_interval_minutes: 15,
-            use_auto_location: false,
+            use_auto_location: true,
             manual_latitude: None,
             manual_longitude: None,
             manual_location_name: None,
