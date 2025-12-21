@@ -250,7 +250,7 @@ impl Application for Tempest {
             if self.config.show_aqi_in_panel {
                 if let Some((aqi, _)) = self.current_aqi {
                     row = row.push(text("|").size(12));
-                    row = row.push(text(format!("AQI {}", aqi)));
+                    row = row.push(text(crate::fl!("aqi-label", value = aqi)));
                 }
             }
             Element::from(row)
@@ -264,7 +264,7 @@ impl Application for Tempest {
             col = col.push(icon).push(temperature_text);
             if self.config.show_aqi_in_panel {
                 if let Some((aqi, _)) = self.current_aqi {
-                    col = col.push(text(format!("AQI {}", aqi)).size(12));
+                    col = col.push(text(crate::fl!("aqi-label", value = aqi)).size(12));
                 }
             }
             Element::from(col)
@@ -278,6 +278,24 @@ impl Application for Tempest {
     }
 
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
+        // Pre-bind all localized strings at the start to ensure proper lifetimes
+        let l_loading = crate::fl!("loading");
+        let l_failed_to_load = crate::fl!("failed-to-load");
+        let l_retry = crate::fl!("retry");
+        let l_tab_current = crate::fl!("tab-current");
+        let l_tab_hourly = crate::fl!("tab-hourly");
+        let l_tab_forecast = crate::fl!("tab-forecast");
+        let l_tab_air_quality = crate::fl!("tab-air-quality");
+        let l_air_quality_unavailable = crate::fl!("air-quality-unavailable");
+        let l_alerts_disabled = crate::fl!("alerts-disabled");
+        let l_alerts_enable_hint = crate::fl!("alerts-enable-hint");
+        let l_no_active_alerts = crate::fl!("no-active-alerts");
+        let l_area_clear = crate::fl!("area-clear");
+        let l_forecast_day = crate::fl!("forecast-day");
+        let l_forecast_high = crate::fl!("forecast-high");
+        let l_forecast_low = crate::fl!("forecast-low");
+        let l_forecast_conditions = crate::fl!("forecast-conditions");
+
         let mut column = widget::column()
             .spacing(10)
             .padding(10)
@@ -297,7 +315,8 @@ impl Application for Tempest {
 
         // Add timestamp if available
         if let Some(ref formatted_time) = self.last_updated_display {
-            header = header.push(text(format!("Updated: {}", formatted_time)).size(12));
+            let l_updated = crate::fl!("updated", time = formatted_time.as_str());
+            header = header.push(text(l_updated).size(12));
         }
 
         // Alert button - styled to stand out when alerts are active
@@ -342,9 +361,9 @@ impl Application for Tempest {
                     widget::column()
                         .spacing(10)
                         .push(widget::icon::from_name("dialog-error-symbolic").size(48))
-                        .push(text("Failed to load weather").size(18))
+                        .push(text(l_failed_to_load).size(18))
                         .push(text(error).size(14))
-                        .push(widget::button::standard("Retry").on_press(Message::RefreshWeather)),
+                        .push(widget::button::standard(l_retry).on_press(Message::RefreshWeather)),
                 )
                 .align_x(cosmic::iced::alignment::Horizontal::Center)
                 .width(cosmic::iced::Length::Fill),
@@ -356,7 +375,7 @@ impl Application for Tempest {
                         .spacing(10)
                         .align_x(cosmic::iced::alignment::Horizontal::Center)
                         .push(widget::icon::from_name("content-loading-symbolic").size(48))
-                        .push(text("Loading weather data...").size(18)),
+                        .push(text(l_loading).size(18)),
                 )
                 .align_x(cosmic::iced::alignment::Horizontal::Center)
                 .width(cosmic::iced::Length::Fill),
@@ -366,10 +385,10 @@ impl Application for Tempest {
             let tab_bar = widget::row()
                 .spacing(8)
                 .align_y(cosmic::iced::Alignment::Center)
-                .push(self.tab_button("Current", PopupTab::Current))
-                .push(self.tab_button("Hourly", PopupTab::Hourly))
-                .push(self.tab_button("7-Day", PopupTab::Forecast))
-                .push(self.tab_button("Air", PopupTab::AirQuality));
+                .push(self.tab_button(l_tab_current, PopupTab::Current))
+                .push(self.tab_button(l_tab_hourly, PopupTab::Hourly))
+                .push(self.tab_button(l_tab_forecast, PopupTab::Forecast))
+                .push(self.tab_button(l_tab_air_quality, PopupTab::AirQuality));
 
             // Tab bar
             column = column.push(
@@ -396,54 +415,53 @@ impl Application for Tempest {
                     );
 
                     // Feels like and humidity
+                    let feels_like_temp = format!("{:.0}{}", weather.current.feels_like, self.config.temperature_unit.symbol());
+                    let l_feels_like = crate::fl!("feels-like", temp = feels_like_temp.as_str());
+                    let l_humidity = crate::fl!("humidity", value = weather.current.humidity);
                     column = column.push(
                         widget::row()
                             .spacing(20)
                             .push(
-                                text(format!(
-                                    "Feels like: {:.0}{}",
-                                    weather.current.feels_like,
-                                    self.config.temperature_unit.symbol()
-                                ))
+                                text(l_feels_like)
                                 .size(14),
                             )
                             .push(
-                                text(format!("Humidity: {}%", weather.current.humidity)).size(14),
+                                text(l_humidity).size(14),
                             ),
                     );
 
                     // Wind information
                     let wind_unit = self.config.measurement_system.wind_speed_unit();
+                    let wind_speed = format!("{:.1}", weather.current.windspeed);
+                    let wind_dir = wind_direction_to_compass(weather.current.wind_direction);
+                    let gust_speed = format!("{:.1}", weather.current.wind_gusts);
+                    let l_wind = crate::fl!("wind", speed = wind_speed.as_str(), unit = wind_unit, direction = wind_dir);
+                    let l_gusts = crate::fl!("gusts", speed = gust_speed.as_str(), unit = wind_unit);
                     column = column.push(
                         widget::row()
                             .spacing(20)
                             .push(
-                                text(format!(
-                                    "Wind: {:.1} {} {}",
-                                    weather.current.windspeed,
-                                    wind_unit,
-                                    wind_direction_to_compass(weather.current.wind_direction)
-                                ))
+                                text(l_wind)
                                 .size(14),
                             )
                             .push(
-                                text(format!(
-                                    "Gusts: {:.1} {}",
-                                    weather.current.wind_gusts, wind_unit
-                                ))
+                                text(l_gusts)
                                 .size(14),
                             ),
                     );
 
                     // UV and cloud cover
+                    let uv_val = format!("{:.1}", weather.current.uv_index);
+                    let l_uv_index = crate::fl!("uv-index", value = uv_val.as_str());
+                    let l_cloud_cover = crate::fl!("cloud-cover", value = weather.current.cloud_cover);
                     column = column.push(
                         widget::row()
                             .spacing(20)
                             .push(
-                                text(format!("UV Index: {:.1}", weather.current.uv_index)).size(14),
+                                text(l_uv_index).size(14),
                             )
                             .push(
-                                text(format!("Cloud Cover: {}%", weather.current.cloud_cover))
+                                text(l_cloud_cover)
                                     .size(14),
                             ),
                     );
@@ -454,30 +472,38 @@ impl Application for Tempest {
                         .measurement_system
                         .convert_visibility(weather.current.visibility);
                     let visibility_unit = self.config.measurement_system.visibility_unit();
+                    let vis_val = format!("{:.1}", visibility);
+                    let pressure_val = format!("{:.0}", weather.current.pressure);
+                    let l_visibility = crate::fl!("visibility", value = vis_val.as_str(), unit = visibility_unit);
+                    let l_pressure = crate::fl!("pressure", value = pressure_val.as_str());
                     column = column.push(
                         widget::row()
                             .spacing(20)
                             .push(
-                                text(format!("Visibility: {:.1} {}", visibility, visibility_unit))
+                                text(l_visibility)
                                     .size(14),
                             )
                             .push(
-                                text(format!("Pressure: {:.0} hPa", weather.current.pressure))
+                                text(l_pressure)
                                     .size(14),
                             ),
                     );
 
                     // Sunrise/Sunset
                     if let Some(first_day) = weather.forecast.first() {
+                        let sunrise_time = format_time(&first_day.sunrise);
+                        let sunset_time = format_time(&first_day.sunset);
+                        let l_sunrise = crate::fl!("sunrise", time = sunrise_time.as_str());
+                        let l_sunset = crate::fl!("sunset", time = sunset_time.as_str());
                         column = column.push(
                             widget::row()
                                 .spacing(20)
                                 .push(
-                                    text(format!("Sunrise: {}", format_time(&first_day.sunrise)))
+                                    text(l_sunrise)
                                         .size(14),
                                 )
                                 .push(
-                                    text(format!("Sunset: {}", format_time(&first_day.sunset)))
+                                    text(l_sunset)
                                         .size(14),
                                 ),
                         );
@@ -495,26 +521,36 @@ impl Application for Tempest {
                                 .push(text(description).size(14)),
                         );
 
+                        let pm25_val = format!("{:.1}", aq.pm2_5);
+                        let pm10_val = format!("{:.1}", aq.pm10);
+                        let l_pm25 = crate::fl!("pm25", value = pm25_val.as_str());
+                        let l_pm10 = crate::fl!("pm10", value = pm10_val.as_str());
                         column = column.push(
                             widget::row()
                                 .spacing(20)
-                                .push(text(format!("PM2.5: {:.1} ug/m3", aq.pm2_5)).size(14))
-                                .push(text(format!("PM10: {:.1} ug/m3", aq.pm10)).size(14)),
+                                .push(text(l_pm25).size(14))
+                                .push(text(l_pm10).size(14)),
                         );
 
+                        let ozone_val = format!("{:.1}", aq.ozone);
+                        let no2_val = format!("{:.1}", aq.nitrogen_dioxide);
+                        let l_ozone = crate::fl!("ozone", value = ozone_val.as_str());
+                        let l_no2 = crate::fl!("no2", value = no2_val.as_str());
                         column = column.push(
                             widget::row()
                                 .spacing(20)
-                                .push(text(format!("Ozone: {:.1} ug/m3", aq.ozone)).size(14))
+                                .push(text(l_ozone).size(14))
                                 .push(
-                                    text(format!("NO2: {:.1} ug/m3", aq.nitrogen_dioxide)).size(14),
+                                    text(l_no2).size(14),
                                 ),
                         );
 
+                        let co_val = format!("{:.1}", aq.carbon_monoxide);
+                        let l_co = crate::fl!("co", value = co_val.as_str());
                         column =
-                            column.push(text(format!("CO: {:.1} ug/m3", aq.carbon_monoxide)).size(14));
+                            column.push(text(l_co).size(14));
                     } else {
-                        column = column.push(text("Air quality data unavailable").size(14));
+                        column = column.push(text(l_air_quality_unavailable).size(14));
                     }
                 }
                 PopupTab::Alerts => {
@@ -524,8 +560,8 @@ impl Application for Tempest {
                                 widget::column()
                                     .spacing(10)
                                     .align_x(cosmic::iced::alignment::Horizontal::Center)
-                                    .push(text("Weather alerts are disabled").size(14))
-                                    .push(text("Enable them in Settings").size(12)),
+                                    .push(text(l_alerts_disabled).size(14))
+                                    .push(text(l_alerts_enable_hint).size(12)),
                             )
                             .align_x(cosmic::iced::alignment::Horizontal::Center)
                             .width(cosmic::iced::Length::Fill),
@@ -541,8 +577,8 @@ impl Application for Tempest {
                                             .size(48)
                                             .symbolic(true),
                                     )
-                                    .push(text("No active alerts").size(16))
-                                    .push(text("Your area is clear").size(12)),
+                                    .push(text(l_no_active_alerts).size(16))
+                                    .push(text(l_area_clear).size(12)),
                             )
                             .align_x(cosmic::iced::alignment::Horizontal::Center)
                             .width(cosmic::iced::Length::Fill),
@@ -584,13 +620,11 @@ impl Application for Tempest {
                                                 .padding([4, 0, 4, 0]),
                                             )
                                         })
-                                        .push(
-                                            text(format!(
-                                                "Expires: {}",
-                                                alert.expires.format("%b %d %I:%M %p")
-                                            ))
-                                            .size(10),
-                                        ),
+                                        .push({
+                                            let expires_time = alert.expires.format("%b %d %I:%M %p").to_string();
+                                            text(crate::fl!("expires", time = expires_time.as_str()))
+                                            .size(10)
+                                        }),
                                 )
                                 .padding(8)
                                 .width(cosmic::iced::Length::Fill),
@@ -650,22 +684,22 @@ impl Application for Tempest {
                         widget::row()
                             .spacing(8)
                             .push(
-                                text("Day")
+                                text(l_forecast_day)
                                     .size(12)
                                     .width(cosmic::iced::Length::Fixed(80.0)),
                             )
                             .push(widget::Space::new(24, 0))
                             .push(
-                                text("High")
+                                text(l_forecast_high)
                                     .size(12)
                                     .width(cosmic::iced::Length::Fixed(45.0)),
                             )
                             .push(
-                                text("Low")
+                                text(l_forecast_low)
                                     .size(12)
                                     .width(cosmic::iced::Length::Fixed(45.0)),
                             )
-                            .push(text("Conditions").size(12)),
+                            .push(text(l_forecast_conditions).size(12)),
                     );
                     column = column.push(widget::divider::horizontal::default());
 
@@ -703,15 +737,34 @@ impl Application for Tempest {
                     }
                 }
                 PopupTab::Settings => {
+                    // Pre-bind all localized strings to extend their lifetime
+                    let l_temp_unit = crate::fl!("settings-temperature-unit");
+                    let l_auto_units = crate::fl!("settings-auto-units");
+                    let l_auto_units_hint = crate::fl!("settings-auto-units-hint");
+                    let l_auto_location = crate::fl!("settings-auto-location");
+                    let l_detect_now = crate::fl!("settings-detect-now");
+                    let l_current_location = crate::fl!("settings-current-location");
+                    let l_search_location = crate::fl!("settings-search-location");
+                    let l_search_placeholder = crate::fl!("settings-search-placeholder");
+                    let l_search = crate::fl!("settings-search");
+                    let l_refresh_interval = crate::fl!("settings-refresh-interval");
+                    let l_minutes = crate::fl!("settings-minutes");
+                    let l_weather_alerts = crate::fl!("settings-weather-alerts");
+                    let l_alerts_hint = crate::fl!("settings-alerts-hint");
+                    let l_show_aqi = crate::fl!("settings-show-aqi");
+                    let l_version = crate::fl!("settings-version");
+                    let l_support = crate::fl!("settings-support");
+                    let l_tip_kofi = crate::fl!("settings-tip-kofi");
+
                     // Units section
                     column = column.push(settings::item(
-                        "Temperature Unit",
+                        l_temp_unit,
                         widget::button::standard(self.config.temperature_unit.as_str())
                             .on_press(Message::ToggleTemperatureUnit),
                     ));
 
                     column = column.push(settings::item(
-                        "Auto-select Units",
+                        l_auto_units,
                         widget::row()
                             .spacing(8)
                             .align_y(cosmic::iced::Alignment::Center)
@@ -719,14 +772,14 @@ impl Application for Tempest {
                                 widget::toggler(self.config.auto_units)
                                     .on_toggle(|_| Message::ToggleAutoUnits),
                             )
-                            .push(text("Based on location").size(11)),
+                            .push(text(l_auto_units_hint).size(11)),
                     ));
 
                     column = column.push(widget::divider::horizontal::default());
 
                     // Location section
                     column = column.push(settings::item(
-                        "Auto-detect Location",
+                        l_auto_location,
                         widget::toggler(self.config.use_auto_location)
                             .on_toggle(|_| Message::ToggleAutoLocation),
                     ));
@@ -734,29 +787,29 @@ impl Application for Tempest {
                     if self.config.use_auto_location {
                         column = column.push(settings::item(
                             "",
-                            widget::button::standard("Detect Now")
+                            widget::button::standard(l_detect_now)
                                 .on_press(Message::DetectLocation),
                         ));
                     }
 
                     column = column.push(settings::item(
-                        "Current Location",
+                        l_current_location,
                         text(&self.config.location_name).size(13),
                     ));
 
                     if !self.config.use_auto_location {
                         column = column.push(settings::item(
-                            "Search Location",
+                            l_search_location,
                             widget::row()
                                 .spacing(8)
                                 .push(
-                                    widget::text_input("Enter city name...", &self.city_input)
+                                    widget::text_input(l_search_placeholder, &self.city_input)
                                         .on_input(Message::UpdateCityInput)
                                         .on_submit(|_| Message::SearchCity)
                                         .width(cosmic::iced::Length::Fixed(180.0)),
                                 )
                                 .push(
-                                    widget::button::standard("Search")
+                                    widget::button::standard(l_search)
                                         .on_press(Message::SearchCity),
                                 ),
                         ));
@@ -777,7 +830,7 @@ impl Application for Tempest {
 
                     // Refresh & Alerts section
                     column = column.push(settings::item(
-                        "Refresh Interval",
+                        l_refresh_interval,
                         widget::row()
                             .spacing(8)
                             .align_y(cosmic::iced::Alignment::Center)
@@ -786,11 +839,11 @@ impl Application for Tempest {
                                     .on_input(Message::UpdateRefreshInterval)
                                     .width(cosmic::iced::Length::Fixed(60.0)),
                             )
-                            .push(text("minutes").size(13)),
+                            .push(text(l_minutes).size(13)),
                     ));
 
                     column = column.push(settings::item(
-                        "Weather Alerts",
+                        l_weather_alerts,
                         widget::row()
                             .spacing(8)
                             .align_y(cosmic::iced::Alignment::Center)
@@ -798,11 +851,11 @@ impl Application for Tempest {
                                 widget::toggler(self.config.alerts_enabled)
                                     .on_toggle(|_| Message::ToggleAlertsEnabled),
                             )
-                            .push(text("US, Canada & Europe").size(11)),
+                            .push(text(l_alerts_hint).size(11)),
                     ));
 
                     column = column.push(settings::item(
-                        "Show AQI in Panel",
+                        l_show_aqi,
                         widget::toggler(self.config.show_aqi_in_panel)
                             .on_toggle(|_| Message::ToggleShowAqiInPanel),
                     ));
@@ -811,13 +864,13 @@ impl Application for Tempest {
 
                     // About section
                     column = column.push(settings::item(
-                        "Version",
+                        l_version,
                         text(VERSION).size(13),
                     ));
 
                     column = column.push(settings::item(
-                        "Support",
-                        widget::button::text("Tip me on Ko-fi").on_press(Message::OpenUrl(
+                        l_support,
+                        widget::button::text(l_tip_kofi).on_press(Message::OpenUrl(
                             "https://ko-fi.com/vintagetechie".to_string(),
                         )),
                     ));
@@ -1146,7 +1199,7 @@ impl Tempest {
     }
 
     /// Creates a tab button, highlighted if it matches the active tab.
-    fn tab_button(&self, label: &'static str, tab: PopupTab) -> Element<'_, Message> {
+    fn tab_button(&self, label: String, tab: PopupTab) -> Element<'_, Message> {
         let btn = widget::button::text(label).on_press(Message::SelectTab(tab));
         if self.active_tab == tab {
             btn.class(cosmic::theme::Button::Suggested).into()

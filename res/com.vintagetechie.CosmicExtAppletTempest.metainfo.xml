@@ -37,7 +37,7 @@
   <url type="homepage">https://github.com/VintageTechie/cosmic-ext-applet-tempest</url>
   <url type="bugtracker">https://github.com/VintageTechie/cosmic-ext-applet-tempest/issues</url>
   <url type="donation">https://ko-fi.com/vintagetechie</url>
-  <developer_name>VintageTechie (J. Crenshaw)</developer_name>
+  <developer_name>VintageTechie</developer_name>
   <update_contact>john@vintagetechie.com</update_contact>
   <launchable type="desktop-id">com.vintagetechie.CosmicExtAppletTempest.desktop</launchable>
 
@@ -47,6 +47,16 @@
   </categories>
 
   <releases>
+    <release version="1.7.0" date="2025-12-20">
+      <description>
+        <p>Internationalization support</p>
+        <ul>
+          <li>Added i18n infrastructure using Fluent</li>
+          <li>All UI strings extracted to translation files</li>
+          <li>Foundation for community translations</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.6.1" date="2025-12-12">
       <description>
         <p>Panel AQI toggle and code improvements</p>
