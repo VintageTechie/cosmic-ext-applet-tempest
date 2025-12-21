@@ -77,14 +77,16 @@ Settings are automatically saved and persist across sessions. The applet default
 
 ## Translations
 
-Tempest supports internationalization via Fluent. Translation files are in `i18n/`:
+Tempest uses [Weblate](https://hosted.weblate.org/projects/tempest/) for translations. Contributions are welcome!
 
-```
-i18n/
-  en/cosmic_ext_applet_tempest.ftl   # English (default)
-```
+[![Translation status](https://hosted.weblate.org/widget/tempest/tempest/svg-badge.svg)](https://hosted.weblate.org/engage/tempest/)
 
-To add a new language, copy the English file to a new directory (e.g., `i18n/de/` for German) and translate the strings. The applet automatically detects the system language.
+To contribute translations:
+1. Visit [Tempest on Weblate](https://hosted.weblate.org/projects/tempest/tempest/)
+2. Select your language or start a new one
+3. Translate strings through the web interface
+
+No coding experience required - just knowledge of your language!
 
 ## Development
 
