@@ -75,6 +75,17 @@ Click the applet to open the popup and navigate to the Settings tab where you ca
 
 Settings are automatically saved and persist across sessions. The applet defaults to New York City coordinates (40.7128, -74.0060) if no location is detected.
 
+## Translations
+
+Tempest supports internationalization via Fluent. Translation files are in `i18n/`:
+
+```
+i18n/
+  en/cosmic_ext_applet_tempest.ftl   # English (default)
+```
+
+To add a new language, copy the English file to a new directory (e.g., `i18n/de/` for German) and translate the strings. The applet automatically detects the system language.
+
 ## Development
 
 A [justfile](./justfile) is included with common recipes:
