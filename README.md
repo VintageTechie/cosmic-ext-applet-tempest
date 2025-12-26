@@ -14,7 +14,7 @@ The Flatpak will continue to work. The manifest will be updated to point to the 
 
 ## More details
 
-[Blog post link here]
+https://blog.vintagetechie.com/why-i-left-github
 
 ---
 
