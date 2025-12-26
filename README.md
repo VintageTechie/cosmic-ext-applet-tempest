@@ -1,101 +1,21 @@
-# Tempest
+# This Repository Has Moved
 
-A weather applet for COSMIC Desktop with automatic location detection.
+**Tempest is now hosted on Codeberg:** https://codeberg.org/VintageTechie/cosmic-ext-applet-tempest
 
-## Screenshots
+## Why?
 
-| Main | Air Quality | 7-Day Forecast | Settings |
-|------|-------------|----------------|----------|
-| ![Main](screenshots/tempest-main.png) | ![Air Quality](screenshots/tempest-aiq.png) | ![7-Day](screenshots/tempest-7day.png) | ![Settings](screenshots/tempest-settings.png) |
+GitHub is owned by Microsoft, and Microsoft uses hosted code to train AI models. I do not consent to my work being used for AI training.
 
-*Note: Hourly and Alerts tabs not shown above.*
+I've moved all my projects to Codeberg, a non-profit, community-run Git hosting service based in Germany with strong privacy protections.
 
-## Roadmap
-   
-   See planned features and progress on the [Project Board](https://github.com/users/VintageTechie/projects/1)
+## For cosmic-flatpak users
 
-## Features
+The Flatpak will continue to work. The manifest will be updated to point to the new Codeberg repository.
 
-- Real-time weather data from Open-Meteo API (no API key required)
-- Current temperature and AQI displayed in panel
-- Detailed popup with tabbed interface:
-  - Current conditions (temperature, feels-like, humidity)
-  - Wind information (speed, direction, gusts)
-  - UV index, cloud cover, visibility, pressure
-  - Sunrise and sunset times
-  - **Air Quality tab**: AQI (US/EU standards), PM2.5, PM10, Ozone, NO2, CO levels
-  - **Alerts tab**: Weather alerts from NWS (US), ECCC (Canada), MeteoAlarm (EU)
-  - **Hourly tab**: Next 12 hours forecast with precipitation probability
-  - **7-Day tab**: Weekly forecast with high/low temperatures
-  - **Settings tab**: All configuration options
-- Automatic location detection via IP geolocation
-- Manual location override with city search
-- Remembers last selected tab between sessions
-- Configurable temperature unit (Fahrenheit/Celsius)
-- Configurable measurement system (Imperial/Metric) for wind and visibility
-- Configurable refresh interval
-- Desktop notifications for weather alerts
-- Persistent configuration
-- Global weather coverage
+## More details
 
-## Installation
+[Blog post link here]
 
-Clone the repository:
+---
 
-```bash
-git clone https://github.com/VintageTechie/cosmic-ext-applet-tempest
-cd cosmic-ext-applet-tempest
-```
-
-Build and install the project:
-
-```bash
-just build-release
-sudo just install
-```
-
-For alternative packaging methods:
-
-- `deb`: run `just build-deb` and `sudo just install-deb`
-- `rpm`: run `just build-rpm` and `sudo just install-rpm`
-
-For vendoring, use `just vendor` and `just vendor-build`
-
-## Configuration
-
-Click the applet to open the popup and navigate to the Settings tab where you can:
-
-- Toggle between automatic and manual location detection
-- Search for a city by name or enter coordinates manually
-- Toggle temperature unit (Fahrenheit/Celsius)
-- Toggle measurement system (Imperial/Metric)
-- Set refresh interval (1-1440 minutes)
-- Enable or disable weather alerts
-- Toggle AQI display in panel
-
-Settings are automatically saved and persist across sessions. The applet defaults to New York City coordinates (40.7128, -74.0060) if no location is detected.
-
-## Translations
-
-Tempest uses [Weblate](https://hosted.weblate.org/projects/tempest/) for translations. Contributions are welcome!
-
-[![Translation status](https://hosted.weblate.org/widget/tempest/tempest/svg-badge.svg)](https://hosted.weblate.org/engage/tempest/)
-
-To contribute translations:
-1. Visit [Tempest on Weblate](https://hosted.weblate.org/projects/tempest/tempest/)
-2. Select your language or start a new one
-3. Translate strings through the web interface
-
-No coding experience required - just knowledge of your language!
-
-## Development
-
-A [justfile](./justfile) is included with common recipes:
-
-- `just build-debug` - Compile with debug profile
-- `just check` - Run clippy linter
-- `just check-json` - LSP-compatible linter output
-
-## License
-
-GPL-3.0-only - See [LICENSE](./LICENSE)
+*This repository is archived and will no longer receive updates.*
