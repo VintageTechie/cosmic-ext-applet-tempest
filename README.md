@@ -1,4 +1,4 @@
-# TThis repository has moved to Codeberg.
+# This repository has moved to Codeberg.
 
 Active development continues at: https://codeberg.org/VintageTechie/cosmic-ext-applet-tempest
 
