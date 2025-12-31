@@ -1,3 +1,15 @@
+# TThis repository has moved to Codeberg.
+
+Active development continues at: https://codeberg.org/VintageTechie/cosmic-ext-applet-tempest
+
+Microsoft purchased GitHub, scraped GPL-licensed code without consent, and used it to train Copilot. A product they sell.
+*I consider that a violation of the spirit, if not the letter, of the GPL.*
+Call it what you want. I call it laundering open source work for profit.
+
+Codeberg is non-profit, doesn't harvest your code for training data, and actually respects the developers who build on it. So that's where I am now.
+This GitHub repository is archived and will not be updated.
+
+
 # Tempest
 
 A weather applet for COSMIC Desktop with automatic location detection.
