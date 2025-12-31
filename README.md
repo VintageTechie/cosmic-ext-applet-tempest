@@ -8,7 +8,10 @@
 
 ### Codeberg is non-profit, doesn't harvest your code for training data, and actually respects the developers who build on it. So that's where I am now.
 ### This GitHub repository is archived and will not be updated.
+---
+## More details
 
+https://blog.vintagetechie.com/why-i-left-github
 
 # Tempest
 
